@@ -1,5 +1,6 @@
 import type { AdapterResponse, AuthConfig, AuthError, AuthResult, NotHandled, RuntimeAdapter } from '../packages/contracts/src/index.js';
 import { createDefaultCryptoProvider } from '../packages/crypto-default/src/index.js';
+import { createResilientDeliveryProvider, type DeliveryTransport } from '@authia/delivery-provider';
 import {
   createAuthKernel,
   createEmailDeliveryFromProvider,
@@ -185,29 +186,27 @@ export async function createCycle2ReferenceApp(input: {
       return { providerSubject: `subject:${code}` };
     }
   };
-  const outboundProvider = {
-    send: async (message: OutboundEmailMessage) => {
+  const outboundTransport: DeliveryTransport = {
+    deliver: async (message: OutboundEmailMessage) => {
       if (deliveryMode === 'disabled') {
-        return undefined;
+        return;
       }
       if (deliveryMode === 'transport-failure') {
-        return {
-          category: 'infrastructure',
-          code: 'STORAGE_UNAVAILABLE',
-          message: 'Delivery provider transport failed.',
-          retryable: true
-        } as const;
+        throw {
+          status: 503,
+          message: 'Delivery provider transport failed.'
+        };
       }
 
       outboundMessages.push(message);
       const url = extractFirstUrl(message.text);
       if (!url) {
-        return undefined;
+        return;
       }
 
       const token = new URL(url).searchParams.get('token');
       if (!token) {
-        return undefined;
+        return;
       }
 
       if (message.subject === 'Reset your password') {
@@ -216,9 +215,17 @@ export async function createCycle2ReferenceApp(input: {
       if (message.subject === 'Verify your email address') {
         deliveries.push({ kind: 'emailVerification', email: message.to, token });
       }
-      return undefined;
     }
   };
+  const outboundProvider = createResilientDeliveryProvider({
+    channel: 'http',
+    transport: outboundTransport,
+    policy: {
+      maxRetries: 0,
+      backoffMs: [0],
+      timeoutMs: 100
+    }
+  });
   const emailDelivery = createEmailDeliveryFromProvider({
     provider: outboundProvider,
     passwordResetUrl: (token) => `${config.publicOrigin}/delivery/password-reset?token=${encodeURIComponent(token)}`,

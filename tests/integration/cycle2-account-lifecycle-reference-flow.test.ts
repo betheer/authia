@@ -84,7 +84,9 @@ describe.skipIf(shouldSkip)('cycle2 account lifecycle delivery flow', () => {
     }
     const [resetMessage] = app.getOutboundMessages();
     expect(resetMessage.subject).toBe('Reset your password');
+    expect(resetMessage.to).toBe('user@example.com');
     expect(resetMessage.text).toContain('/delivery/password-reset?token=');
+    expect(app.getOutboundMessages()).toHaveLength(1);
 
     const missingIdentityRequest = await client.send({
       method: 'POST',
@@ -141,7 +143,9 @@ describe.skipIf(shouldSkip)('cycle2 account lifecycle delivery flow', () => {
     const [verificationMessage] = app.getOutboundMessages().filter(
       (message) => message.subject === 'Verify your email address'
     );
+    expect(verificationMessage.to).toBe('verify@example.com');
     expect(verificationMessage.text).toContain('/delivery/email-verification?token=');
+    expect(app.getOutboundMessages()).toHaveLength(1);
 
     const verify = await client.send({
       method: 'POST',
@@ -181,6 +185,8 @@ describe.skipIf(shouldSkip)('cycle2 account lifecycle delivery flow', () => {
 
     expect(isAuthError(result)).toBe(true);
     expect((result as AuthError).code).toBe('STORAGE_UNAVAILABLE');
+    expect(app.getOutboundMessages()).toHaveLength(0);
+    expect(app.getDeliveries()).toHaveLength(0);
   });
 
   it('keeps lifecycle requests successful in disabled delivery mode', async () => {
