@@ -68,6 +68,21 @@ Cons:
 
 These actions are plugin-owned (not kernel built-ins).
 
+### Explicit unit contracts
+
+`state-store.ts`
+
+- `create(input: { providerId: string; stateHash: string; codeVerifierHash: string; redirectUriHash: string; expiresAt: string }): Promise<AuthValue<void>>`
+- `consume(input: { providerId: string; stateHash: string; nowIso: string }): Promise<AuthValue<{ codeVerifierHash: string; redirectUriHash: string } | null>>`
+- `consume(...)` is atomic and one-time: returns `null` when missing, expired, or already consumed.
+
+`provider-client.ts`
+
+- `buildAuthorizationUrl(input: { providerId: string; redirectUri: string; state: string; codeChallenge: string }): AuthValue<string>`
+- `exchangeCode(input: { providerId: string; code: string; redirectUri: string; codeVerifier: string }): Promise<AuthValue<{ providerSubject: string }>>`
+- Provider rejection (`invalid_grant`, denied consent) maps to `unauthenticated(INVALID_CREDENTIALS)`.
+- Provider transport failure/timeout maps to `AuthError(STORAGE_UNAVAILABLE)` until dedicated provider infra code is introduced.
+
 ### New plugin package
 
 `packages/core/src/plugins/oauth/`:
@@ -87,6 +102,9 @@ Rules:
 - state is one-time use
 - state expiry enforced server-side
 - callback consumes state atomically
+- oauth identity uniqueness is `(provider, provider_subject)` globally
+- callback links to existing row when present, otherwise creates a new user + mapping in one transaction
+- if identity creation unique check collides after provider exchange, callback retries lookup once and uses the canonical row
 
 ### Runtime behavior
 
@@ -96,6 +114,13 @@ Rules:
   - `denied(INVALID_INPUT)` for malformed callback input/state mismatch
   - `unauthenticated(INVALID_CREDENTIALS)` for provider rejection
   - `AuthError(STORAGE_UNAVAILABLE|CRYPTO_FAILURE)` for infra failures
+
+`startOAuth` failure mapping:
+
+- malformed provider id / callback parameters -> `denied(INVALID_INPUT)`
+- unknown provider config -> `denied(INVALID_INPUT)`
+- state persistence failure -> `AuthError(STORAGE_UNAVAILABLE)`
+- URL composition/crypto failure -> `AuthError(CRYPTO_FAILURE)`
 
 ## Data flow
 
@@ -108,6 +133,12 @@ Rules:
 7. Plugin exchanges `code` with provider adapter to obtain stable provider subject.
 8. Plugin resolves or creates local user identity mapping.
 9. Plugin issues Authia session through existing session layer.
+
+Identity resolution policy:
+
+- If `(provider, providerSubject)` exists: load mapped `user_id`, issue session.
+- If absent: create user and mapping transactionally, then issue session.
+- No email-based auto-linking in this slice (prevents account takeover by unverified provider email claims).
 
 ## Error handling and security controls
 
@@ -123,9 +154,10 @@ Rules:
 Extend startup validator with OAuth invariants:
 
 - provider config completeness (client id, auth/token endpoints, callback path)
-- callback entrypoint path uniqueness
+- callback entrypoint path uniqueness globally across all actions (`method:path` pair)
 - OAuth actions must have exactly one owner
 - runtime redirect capability required when OAuth plugin active
+- PKCE required for every provider (`S256` only in this slice)
 
 ## Testing strategy
 
@@ -146,6 +178,12 @@ Extend startup validator with OAuth invariants:
 2. Storage schema + repositories for OAuth state/identity.
 3. OAuth plugin core flow with provider adapter abstraction.
 4. Integration release-gate suite with mock provider exchange.
+
+## Open decisions intentionally deferred (non-blocking for Cycle 2 slice 1)
+
+- Multi-tenant provider configuration strategy.
+- Provider-specific profile claims normalization.
+- External refresh token storage/rotation.
 
 ## Success criteria
 
