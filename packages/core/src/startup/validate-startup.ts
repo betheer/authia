@@ -76,6 +76,27 @@ export function validateStartupConfig(
         };
       }
     }
+    const configuredEntrypointPaths = new Set(
+      Object.values(config.entrypointPaths).filter((value): value is string => typeof value === 'string' && value.length > 0)
+    );
+    const providerCallbackPaths = new Set<string>();
+    for (const [providerId, provider] of Object.entries(providers)) {
+      if (configuredEntrypointPaths.has(provider.callbackPath)) {
+        return {
+          ok: false,
+          code: 'RUNTIME_MISCONFIGURED',
+          message: `OAuth provider ${providerId} callbackPath collides with an existing entrypoint path.`
+        };
+      }
+      if (providerCallbackPaths.has(provider.callbackPath)) {
+        return {
+          ok: false,
+          code: 'RUNTIME_MISCONFIGURED',
+          message: `OAuth provider ${providerId} callbackPath collides with another provider callback.`
+        };
+      }
+      providerCallbackPaths.add(provider.callbackPath);
+    }
     if (!runtimeCapabilities.redirects) {
       return {
         ok: false,

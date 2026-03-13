@@ -179,6 +179,21 @@ describe('validateStartupConfig', () => {
     }
   });
 
+  it('rejects configured OAuth actions when oauthProviders is empty', () => {
+    const result = validateStartupConfig(
+      createOAuthConfiguredConfig(baseConfig, {
+        oauthProviders: {}
+      }),
+      [...pluginActions, ...oauthActions] as any,
+      { redirects: true }
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain('oauthProviders');
+    }
+  });
+
   it('rejects when only one OAuth action is configured', () => {
     const config = createOAuthConfiguredConfig(baseConfig, {
       entrypointMethods: {
@@ -300,6 +315,29 @@ describe('validateStartupConfig', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.message).toContain('redirect');
+    }
+  });
+
+  it('rejects oauth provider callback path collisions with entrypoints', () => {
+    const result = validateStartupConfig(
+      createOAuthConfiguredConfig(baseConfig, {
+        oauthProviders: {
+          github: {
+            clientId: 'client-id',
+            authorizationEndpoint: 'https://github.com/login/oauth/authorize',
+            tokenEndpoint: 'https://github.com/login/oauth/access_token',
+            callbackPath: '/auth/session',
+            pkceMethod: 'S256'
+          }
+        }
+      }),
+      [...pluginActions, ...oauthActions] as any,
+      { redirects: true }
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain('collides');
     }
   });
 });
