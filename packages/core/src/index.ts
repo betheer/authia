@@ -1,5 +1,6 @@
 export * from './session/session-layer.js';
 export * from './plugins/email-password/plugin.js';
+export * from './plugins/email-password/provider-delivery.js';
 export * from './plugins/oauth/plugin.js';
 export * from './kernel/auth-kernel.js';
 export * from './kernel/rollback-signal.js';

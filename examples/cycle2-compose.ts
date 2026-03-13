@@ -1,6 +1,14 @@
 import type { AdapterResponse, AuthConfig, AuthError, AuthResult, NotHandled, RuntimeAdapter } from '../packages/contracts/src/index.js';
 import { createDefaultCryptoProvider } from '../packages/crypto-default/src/index.js';
-import { createAuthKernel, createEmailPasswordPlugin, createOAuthPlugin, createSessionLayer, validateStartupConfig } from '../packages/core/src/index.js';
+import {
+  createAuthKernel,
+  createEmailDeliveryFromProvider,
+  createEmailPasswordPlugin,
+  createOAuthPlugin,
+  createSessionLayer,
+  type OutboundEmailMessage,
+  validateStartupConfig
+} from '../packages/core/src/index.js';
 import { createNodeRuntimeAdapter, validateNodeConfig } from '../packages/node-adapter/src/index.js';
 import { createPostgresStorageAdapter } from '../packages/storage-postgres/src/index.js';
 
@@ -14,6 +22,7 @@ type DeliveryRecord =
 export type Cycle2ReferenceApp = {
   config: Readonly<AuthConfig>;
   getDeliveries: () => DeliveryRecord[];
+  getOutboundMessages: () => OutboundEmailMessage[];
   handleRequest: (input: RuntimeInput) => Promise<AdapterResponse | AuthError | NotHandled>;
 };
 
@@ -104,6 +113,11 @@ function parseError(message: string): Error {
   return new Error(`Cycle2 composition failed: ${message}`);
 }
 
+function extractFirstUrl(text: string): string | null {
+  const match = text.match(/https?:\/\/\S+/);
+  return match ? match[0] : null;
+}
+
 export async function createCycle2ReferenceApp(input: {
   connectionString: string;
   providerMode?: ProviderMode;
@@ -128,6 +142,7 @@ export async function createCycle2ReferenceApp(input: {
   const mode = input.providerMode ?? 'success';
   const deliveryMode = input.deliveryMode ?? 'success';
   const deliveries: DeliveryRecord[] = [];
+  const outboundMessages: OutboundEmailMessage[] = [];
   const oauthProviderClient = {
     buildAuthorizationUrl: ({ providerId, redirectUri, state, codeChallenge }: {
       providerId: string;
@@ -170,8 +185,8 @@ export async function createCycle2ReferenceApp(input: {
       return { providerSubject: `subject:${code}` };
     }
   };
-  const emailDelivery = {
-    sendPasswordReset: async ({ email, resetToken }: { email: string; resetToken: string }) => {
+  const outboundProvider = {
+    send: async (message: OutboundEmailMessage) => {
       if (deliveryMode === 'disabled') {
         return undefined;
       }
@@ -183,25 +198,33 @@ export async function createCycle2ReferenceApp(input: {
           retryable: true
         } as const;
       }
-      deliveries.push({ kind: 'passwordReset', email, token: resetToken });
-      return undefined;
-    },
-    sendEmailVerification: async ({ email, verificationToken }: { email: string; verificationToken: string }) => {
-      if (deliveryMode === 'disabled') {
+
+      outboundMessages.push(message);
+      const url = extractFirstUrl(message.text);
+      if (!url) {
         return undefined;
       }
-      if (deliveryMode === 'transport-failure') {
-        return {
-          category: 'infrastructure',
-          code: 'STORAGE_UNAVAILABLE',
-          message: 'Delivery provider transport failed.',
-          retryable: true
-        } as const;
+
+      const token = new URL(url).searchParams.get('token');
+      if (!token) {
+        return undefined;
       }
-      deliveries.push({ kind: 'emailVerification', email, token: verificationToken });
+
+      if (message.subject === 'Reset your password') {
+        deliveries.push({ kind: 'passwordReset', email: message.to, token });
+      }
+      if (message.subject === 'Verify your email address') {
+        deliveries.push({ kind: 'emailVerification', email: message.to, token });
+      }
       return undefined;
     }
   };
+  const emailDelivery = createEmailDeliveryFromProvider({
+    provider: outboundProvider,
+    passwordResetUrl: (token) => `${config.publicOrigin}/delivery/password-reset?token=${encodeURIComponent(token)}`,
+    emailVerificationUrl: (token) =>
+      `${config.publicOrigin}/delivery/email-verification?token=${encodeURIComponent(token)}`
+  });
 
   const services = {
     storage,
@@ -269,6 +292,7 @@ export async function createCycle2ReferenceApp(input: {
   return {
     config: frozenConfig,
     getDeliveries: () => [...deliveries],
+    getOutboundMessages: () => [...outboundMessages],
     handleRequest: async (requestInput) => {
       const parsed = await runtime.parseRequest(requestInput);
       if ('kind' in parsed && parsed.kind === 'notHandled') {

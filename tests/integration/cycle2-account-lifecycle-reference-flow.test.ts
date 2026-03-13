@@ -82,6 +82,9 @@ describe.skipIf(shouldSkip)('cycle2 account lifecycle delivery flow', () => {
     if (!resetDelivery || resetDelivery.kind !== 'passwordReset') {
       throw new Error('Expected password reset delivery');
     }
+    const [resetMessage] = app.getOutboundMessages();
+    expect(resetMessage.subject).toBe('Reset your password');
+    expect(resetMessage.text).toContain('/delivery/password-reset?token=');
 
     const missingIdentityRequest = await client.send({
       method: 'POST',
@@ -135,6 +138,10 @@ describe.skipIf(shouldSkip)('cycle2 account lifecycle delivery flow', () => {
     if (!delivery || delivery.kind !== 'emailVerification') {
       throw new Error('Expected email verification delivery');
     }
+    const [verificationMessage] = app.getOutboundMessages().filter(
+      (message) => message.subject === 'Verify your email address'
+    );
+    expect(verificationMessage.text).toContain('/delivery/email-verification?token=');
 
     const verify = await client.send({
       method: 'POST',
@@ -174,5 +181,36 @@ describe.skipIf(shouldSkip)('cycle2 account lifecycle delivery flow', () => {
 
     expect(isAuthError(result)).toBe(true);
     expect((result as AuthError).code).toBe('STORAGE_UNAVAILABLE');
+  });
+
+  it('keeps lifecycle requests successful in disabled delivery mode', async () => {
+    const app = await createCycle2ReferenceApp({
+      connectionString,
+      config: { publicOrigin },
+      deliveryMode: 'disabled'
+    });
+    const client = createMemoryResponseClient(app, publicOrigin);
+
+    await client.send({
+      method: 'POST',
+      path: '/auth/signup',
+      body: { email: 'disabled@example.com', password: 'password123' }
+    });
+
+    const reset = await client.send({
+      method: 'POST',
+      path: '/auth/password/request-reset',
+      body: { email: 'disabled@example.com' }
+    });
+    const verify = await client.send({
+      method: 'POST',
+      path: '/auth/email/request-verification',
+      body: { email: 'disabled@example.com' }
+    });
+
+    expect((reset as AdapterResponse).status).toBe(200);
+    expect((verify as AdapterResponse).status).toBe(200);
+    expect(app.getOutboundMessages()).toHaveLength(0);
+    expect(app.getDeliveries()).toHaveLength(0);
   });
 });
