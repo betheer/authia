@@ -97,6 +97,15 @@ Proceed with **Option A**. It aligns with existing contract-first boundaries and
 - `src/index.ts`
   - package exports
 
+### 1.1) Unit boundaries and contracts
+
+- **Transport adapter boundary** (transport-specific, no retry orchestration):
+  - `type DeliveryTransport = { deliver(message: OutboundEmailMessage): Promise<AuthValue<void>> }`
+- **Policy wrapper boundary** (transport-agnostic orchestration):
+  - `type ResilientDeliveryProvider = { send(message: OutboundEmailMessage): Promise<AuthValue<void>> }`
+  - wraps `DeliveryTransport` with timeout/retry/backoff and telemetry
+- Core integration consumes only `ResilientDeliveryProvider` via `createEmailDeliveryFromProvider(...)`.
+
 ### 2) Integration seam
 
 - Core remains unchanged at contract level.
@@ -135,7 +144,7 @@ Proceed with **Option A**. It aligns with existing contract-first boundaries and
 ## Data flow
 
 1. Email-password plugin creates lifecycle token and persists hash.
-2. Plugin calls `emailDelivery.send*`.
+2. Plugin calls `emailDelivery.sendPasswordReset(...)` or `emailDelivery.sendEmailVerification(...)`.
 3. `createEmailDeliveryFromProvider(...)` builds message body with URL.
 4. Delivery provider package sends via SMTP/API transport with retry/timeout policy.
 5. Provider result returns success or mapped `AuthError`.
@@ -143,13 +152,19 @@ Proceed with **Option A**. It aligns with existing contract-first boundaries and
 
 ## Configuration design
 
+### Canonical precedence and source of truth
+
+- Transport config includes only transport identity/connectivity fields.
+- Retry/timeout/backoff settings exist only in shared policy config.
+- If duplicate retry/timeout values are provided in transport config, construction fails with `DELIVERY_MISCONFIGURED` (no implicit precedence).
+
 ### SMTP config
 
-- host, port, secure, auth user/pass, from address, timeout, maxRetries
+- host, port, secure, auth user/pass, from address
 
 ### HTTP API config
 
-- endpoint URL, API key/header, from address, timeout, maxRetries
+- endpoint URL, API key/header, from address
 
 ### Shared policy config
 
@@ -157,6 +172,25 @@ Proceed with **Option A**. It aligns with existing contract-first boundaries and
 - max retry attempts
 - retry backoff strategy (bounded deterministic sequence: `100ms`, `300ms`, `700ms`)
 - uncertain-send policy: `fail-closed` (never synthesize success when send outcome is ambiguous)
+
+## Transport-to-error mapping table
+
+### HTTP transport
+
+- 2xx => success
+- 429 => `DELIVERY_RATE_LIMITED` (`retryable: true`)
+- 401/403 => `DELIVERY_MISCONFIGURED` (`retryable: false`)
+- other 4xx => `DELIVERY_MISCONFIGURED` (`retryable: false`)
+- 5xx => `DELIVERY_UNAVAILABLE` (`retryable: true`)
+- timeout/network failure => `DELIVERY_UNAVAILABLE` (`retryable: true`)
+
+### SMTP transport
+
+- accepted send => success
+- auth rejection => `DELIVERY_MISCONFIGURED` (`retryable: false`)
+- transient/deferral class (4xx) => `DELIVERY_UNAVAILABLE` (`retryable: true`)
+- permanent class (5xx) => `DELIVERY_UNAVAILABLE` (`retryable: false`)
+- timeout/network failure => `DELIVERY_UNAVAILABLE` (`retryable: true`)
 
 ## Testing strategy
 
