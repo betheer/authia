@@ -162,3 +162,11 @@ audits/
 - Cycle 2 OAuth: complete and audited.
 - Bun and Deno adapter slices: complete and audited.
 - Next planned work: account lifecycle extensions (verification email / password reset).
+
+## Copyright
+
+Startup name: Complexia (complexia.org), All rights reserved.
+
+Viewing the source code is permitted for reference only.
+
+Copying, modification, redistribution, or commercial use is prohibited without written permission.
