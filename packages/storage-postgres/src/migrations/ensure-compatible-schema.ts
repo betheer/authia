@@ -2,7 +2,16 @@ import type { AuthError } from '@authia/contracts';
 import type { DatabaseClient } from '../database.js';
 import { storageUnavailable } from '../database.js';
 
-const EXPECTED_TABLES = ['users', 'local_identities', 'sessions', 'oauth_states', 'oauth_identities', 'password_reset_tokens'];
+const EXPECTED_TABLES = [
+  'users',
+  'local_identities',
+  'sessions',
+  'oauth_states',
+  'oauth_identities',
+  'password_reset_tokens',
+  'email_verification_tokens',
+  'verified_emails'
+];
 const EXPECTED_COLUMNS = {
   users: ['id', 'created_at'],
   local_identities: ['id', 'user_id', 'normalized_email', 'password_hash'],
@@ -26,7 +35,9 @@ const EXPECTED_COLUMNS = {
     'consumed_at'
   ],
   oauth_identities: ['id', 'user_id', 'provider', 'provider_subject'],
-  password_reset_tokens: ['id', 'token_hash', 'normalized_email', 'expires_at', 'consumed_at']
+  password_reset_tokens: ['id', 'token_hash', 'normalized_email', 'expires_at', 'consumed_at'],
+  email_verification_tokens: ['id', 'token_hash', 'normalized_email', 'expires_at', 'consumed_at'],
+  verified_emails: ['normalized_email', 'verified_at']
 };
 
 export async function ensureCompatibleSchema(

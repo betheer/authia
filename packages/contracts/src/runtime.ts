@@ -63,6 +63,7 @@ export type RequestContext = {
     email?: string;
     password?: string;
     resetToken?: string;
+    verificationToken?: string;
     provider?: string;
     redirectTo?: string;
     code?: string;
@@ -82,7 +83,7 @@ export type AuthResult =
     }
   | {
       kind: 'success';
-      action: 'requestPasswordReset' | 'resetPassword';
+      action: 'requestPasswordReset' | 'resetPassword' | 'requestEmailVerification' | 'verifyEmail';
       responseMutations?: ResponseMutations;
     }
   | {

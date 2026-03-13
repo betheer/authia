@@ -388,6 +388,79 @@ describe('createEmailPasswordPlugin', () => {
       services.tx as unknown as TransactionalStorage
     );
   });
+
+  it('returns generic success for requestEmailVerification when email identity does not exist', async () => {
+    const plugin = createEmailPasswordPlugin();
+    const services = createPluginServices();
+
+    services.storage.identities.findByNormalizedEmail.mockResolvedValue(null);
+
+    const result = await plugin.execute(
+      'requestEmailVerification',
+      createContext({ body: { email: 'missing@example.com' } }),
+      services as unknown as PluginServices
+    );
+
+    expect(result).toEqual({ kind: 'success', action: 'requestEmailVerification' });
+    expect(services.storage.emailVerificationTokens.create).not.toHaveBeenCalled();
+  });
+
+  it('creates verification token when requestEmailVerification identity exists and is not verified', async () => {
+    const plugin = createEmailPasswordPlugin();
+    const services = createPluginServices();
+
+    services.storage.identities.findByNormalizedEmail.mockResolvedValue({
+      id: 'identity-1',
+      userId: 'user-1',
+      normalizedEmail: 'user@example.com',
+      passwordHash: 'stored-hash'
+    });
+    services.storage.verifiedEmails.find.mockResolvedValue(null);
+    services.crypto.generateOpaqueToken.mockResolvedValue('verify-token');
+    services.crypto.deriveTokenId.mockResolvedValue('verify-token-hash');
+    services.storage.emailVerificationTokens.create.mockResolvedValue({
+      id: 'verification-id',
+      tokenHash: 'verify-token-hash',
+      normalizedEmail: 'user@example.com',
+      expiresAt: '2025-01-02T00:00:00.000Z',
+      consumedAt: null
+    });
+
+    const result = await plugin.execute(
+      'requestEmailVerification',
+      createContext({ body: { email: 'user@example.com' } }),
+      services as unknown as PluginServices
+    );
+
+    expect(result).toEqual({ kind: 'success', action: 'requestEmailVerification' });
+    expect(services.storage.emailVerificationTokens.create).toHaveBeenCalledWith(
+      expect.objectContaining({ tokenHash: 'verify-token-hash', normalizedEmail: 'user@example.com' })
+    );
+  });
+
+  it('consumes verification token and marks email as verified', async () => {
+    const plugin = createEmailPasswordPlugin();
+    const services = createPluginServices();
+
+    services.crypto.deriveTokenId.mockResolvedValue('verify-token-hash');
+    services.tx.emailVerificationTokens.consume.mockResolvedValue({ normalizedEmail: 'user@example.com' });
+    services.tx.verifiedEmails.markVerified.mockResolvedValue({
+      normalizedEmail: 'user@example.com',
+      verifiedAt: '2025-01-01T00:00:00.000Z'
+    });
+
+    const result = await plugin.execute(
+      'verifyEmail',
+      createContext({ body: { verificationToken: 'verify-token' } }),
+      services as unknown as PluginServices
+    );
+
+    expect(result).toEqual({ kind: 'success', action: 'verifyEmail' });
+    expect(services.tx.emailVerificationTokens.consume).toHaveBeenCalledWith(
+      expect.objectContaining({ tokenHash: 'verify-token-hash' })
+    );
+    expect(services.tx.verifiedEmails.markVerified).toHaveBeenCalled();
+  });
 });
 
 function createConfig(overrides: Partial<AuthConfig> = {}): AuthConfig {
@@ -497,6 +570,14 @@ function createPluginServices() {
       create: vi.fn(),
       consume: vi.fn()
     },
+    emailVerificationTokens: {
+      create: vi.fn(),
+      consume: vi.fn()
+    },
+    verifiedEmails: {
+      markVerified: vi.fn(),
+      find: vi.fn()
+    },
     beginTransaction: vi.fn(async (run: (txArg: TransactionalStorage) => Promise<unknown>) => run(tx as unknown as TransactionalStorage))
   };
 
@@ -549,6 +630,14 @@ function createTransactionalStorage() {
     passwordResetTokens: {
       create: vi.fn(),
       consume: vi.fn()
+    },
+    emailVerificationTokens: {
+      create: vi.fn(),
+      consume: vi.fn()
+    },
+    verifiedEmails: {
+      markVerified: vi.fn(),
+      find: vi.fn()
     }
   };
 }

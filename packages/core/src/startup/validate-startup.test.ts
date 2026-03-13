@@ -178,6 +178,24 @@ describe('validateStartupConfig', () => {
     }
   });
 
+  it('rejects partial email-verification action route configuration', () => {
+    const result = validateStartupConfig(
+      {
+        ...baseConfig,
+        entrypointMethods: {
+          ...baseConfig.entrypointMethods,
+          requestEmailVerification: 'POST'
+        }
+      } as any,
+      [...pluginActions]
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain('requestEmailVerification');
+    }
+  });
+
   it('passes for valid configuration and complete ownership', () => {
     const result = validateStartupConfig(baseConfig, [...pluginActions], { redirects: false });
 

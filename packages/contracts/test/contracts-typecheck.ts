@@ -103,6 +103,23 @@ const storageAdapter: StorageAdapter = {
     }),
     consume: async () => null
   },
+  emailVerificationTokens: {
+    create: async () => ({
+      id: 'verification-token',
+      tokenHash: 'token-hash',
+      normalizedEmail: 'user@example.com',
+      expiresAt: '',
+      consumedAt: null
+    }),
+    consume: async () => null
+  },
+  verifiedEmails: {
+    markVerified: async () => ({
+      normalizedEmail: 'user@example.com',
+      verifiedAt: ''
+    }),
+    find: async () => null
+  },
   beginTransaction: async <T>(run: (tx: never) => Promise<T>) => run({} as never)
 };
 

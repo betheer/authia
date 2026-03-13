@@ -289,6 +289,58 @@ describe('createDenoRuntimeAdapter', () => {
     expect(result).toEqual({ kind: 'denied', code: 'INVALID_INPUT' });
   });
 
+  it('parses requestEmailVerification body with email', async () => {
+    const adapter = createDenoRuntimeAdapter(createEmailVerificationConfig());
+
+    const result = await adapter.parseRequest({
+      method: 'POST',
+      url: 'https://example.com/auth/email/request-verification',
+      headers: {},
+      cookies: {},
+      body: { email: 'user@example.com' }
+    });
+
+    if ('runtime' in result) {
+      expect(result.action).toBe('requestEmailVerification');
+      expect(result.body).toEqual({ email: 'user@example.com' });
+      return;
+    }
+    throw new Error('Expected parseRequest to return RequestContext.');
+  });
+
+  it('parses verifyEmail body with verificationToken', async () => {
+    const adapter = createDenoRuntimeAdapter(createEmailVerificationConfig());
+
+    const result = await adapter.parseRequest({
+      method: 'POST',
+      url: 'https://example.com/auth/email/verify',
+      headers: {},
+      cookies: {},
+      body: { verificationToken: 'token-1' }
+    });
+
+    if ('runtime' in result) {
+      expect(result.action).toBe('verifyEmail');
+      expect(result.body).toEqual({ verificationToken: 'token-1' });
+      return;
+    }
+    throw new Error('Expected parseRequest to return RequestContext.');
+  });
+
+  it('rejects malformed verifyEmail payload fields', async () => {
+    const adapter = createDenoRuntimeAdapter(createEmailVerificationConfig());
+
+    const result = await adapter.parseRequest({
+      method: 'POST',
+      url: 'https://example.com/auth/email/verify',
+      headers: {},
+      cookies: {},
+      body: { verificationToken: '' }
+    });
+
+    expect(result).toEqual({ kind: 'denied', code: 'INVALID_INPUT' });
+  });
+
   it('maps result objects into runtime responses', async () => {
     const success = await applyResult({
       kind: 'success',
@@ -404,6 +456,28 @@ function createPasswordResetConfig(): AuthConfig {
       ...config.entrypointTransport,
       requestPasswordReset: 'cookie',
       resetPassword: 'cookie'
+    }
+  };
+}
+
+function createEmailVerificationConfig(): AuthConfig {
+  const config = createConfig();
+  return {
+    ...config,
+    entrypointMethods: {
+      ...config.entrypointMethods,
+      requestEmailVerification: 'POST',
+      verifyEmail: 'POST'
+    },
+    entrypointPaths: {
+      ...config.entrypointPaths,
+      requestEmailVerification: '/auth/email/request-verification',
+      verifyEmail: '/auth/email/verify'
+    },
+    entrypointTransport: {
+      ...config.entrypointTransport,
+      requestEmailVerification: 'cookie',
+      verifyEmail: 'cookie'
     }
   };
 }

@@ -91,6 +91,30 @@ export type PasswordResetToken = {
   consumedAt: string | null;
 };
 
+export type EmailVerificationTokenCreateInput = {
+  tokenHash: string;
+  normalizedEmail: string;
+  expiresAt: string;
+};
+
+export type EmailVerificationTokenConsumeInput = {
+  tokenHash: string;
+  nowIso: string;
+};
+
+export type EmailVerificationToken = {
+  id: string;
+  tokenHash: string;
+  normalizedEmail: string;
+  expiresAt: string;
+  consumedAt: string | null;
+};
+
+export type VerifiedEmailRecord = {
+  normalizedEmail: string;
+  verifiedAt: string;
+};
+
 export type TransactionalStorage = {
   migrations: {
     ensureCompatibleSchema: () => Promise<'ok' | 'MIGRATION_MISMATCH' | AuthError>;
@@ -135,6 +159,16 @@ export type TransactionalStorage = {
       input: PasswordResetTokenConsumeInput
     ) => Promise<AuthValue<{ normalizedEmail: string } | null>>;
   };
+  emailVerificationTokens?: {
+    create: (input: EmailVerificationTokenCreateInput) => Promise<AuthValue<EmailVerificationToken>>;
+    consume: (
+      input: EmailVerificationTokenConsumeInput
+    ) => Promise<AuthValue<{ normalizedEmail: string } | null>>;
+  };
+  verifiedEmails?: {
+    markVerified: (normalizedEmail: string, verifiedAt: string) => Promise<AuthValue<VerifiedEmailRecord>>;
+    find: (normalizedEmail: string) => Promise<AuthValue<VerifiedEmailRecord | null>>;
+  };
 };
 
 export type StorageAdapter = {
@@ -145,5 +179,7 @@ export type StorageAdapter = {
   oauthStates?: TransactionalStorage['oauthStates'];
   oauthIdentities?: TransactionalStorage['oauthIdentities'];
   passwordResetTokens?: TransactionalStorage['passwordResetTokens'];
+  emailVerificationTokens?: TransactionalStorage['emailVerificationTokens'];
+  verifiedEmails?: TransactionalStorage['verifiedEmails'];
   beginTransaction: <T>(run: (tx: TransactionalStorage) => Promise<T>) => Promise<AuthValue<T>>;
 };

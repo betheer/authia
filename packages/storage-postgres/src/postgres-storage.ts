@@ -7,6 +7,8 @@ import { createSessionsRepository } from './repositories/sessions-repository.js'
 import { createOAuthStatesRepository } from './repositories/oauth-states-repository.js';
 import { createOAuthIdentitiesRepository } from './repositories/oauth-identities-repository.js';
 import { createPasswordResetTokensRepository } from './repositories/password-reset-tokens-repository.js';
+import { createEmailVerificationTokensRepository } from './repositories/email-verification-tokens-repository.js';
+import { createVerifiedEmailsRepository } from './repositories/verified-emails-repository.js';
 import { beginTransaction } from './transactions.js';
 
 export function createPostgresStorageAdapter(connectionString: string): StorageAdapter {
@@ -22,6 +24,8 @@ export function createPostgresStorageAdapter(connectionString: string): StorageA
     oauthStates: createOAuthStatesRepository(pool),
     oauthIdentities: createOAuthIdentitiesRepository(pool),
     passwordResetTokens: createPasswordResetTokensRepository(pool),
+    emailVerificationTokens: createEmailVerificationTokensRepository(pool),
+    verifiedEmails: createVerifiedEmailsRepository(pool),
     beginTransaction: async (run) => beginTransaction(connectionString, run)
   };
 }

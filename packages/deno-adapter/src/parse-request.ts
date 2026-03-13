@@ -165,6 +165,18 @@ export async function parseRequest(
     }
   }
 
+  if (action === 'requestEmailVerification') {
+    if (!body || !isNonEmptyString(body.email)) {
+      return invalidInputResult();
+    }
+  }
+
+  if (action === 'verifyEmail') {
+    if (!body || !isNonEmptyString(body.verificationToken)) {
+      return invalidInputResult();
+    }
+  }
+
   return {
     action,
     runtime: 'node',

@@ -3,6 +3,8 @@ export const supportedActions = [
   'signInWithPassword',
   'requestPasswordReset',
   'resetPassword',
+  'requestEmailVerification',
+  'verifyEmail',
   'getSession',
   'refreshSession',
   'logout',
@@ -20,6 +22,8 @@ export type EntrypointMethodMap = {
   signInWithPassword: 'POST';
   requestPasswordReset?: 'POST';
   resetPassword?: 'POST';
+  requestEmailVerification?: 'POST';
+  verifyEmail?: 'POST';
   getSession: 'GET';
   refreshSession: 'POST';
   logout: 'POST';
@@ -33,6 +37,8 @@ export type EntrypointTransportMap = {
   signInWithPassword: 'cookie' | 'bearer';
   requestPasswordReset?: 'cookie' | 'bearer';
   resetPassword?: 'cookie' | 'bearer';
+  requestEmailVerification?: 'cookie' | 'bearer';
+  verifyEmail?: 'cookie' | 'bearer';
   getSession: 'cookie' | 'bearer';
   refreshSession: 'cookie' | 'bearer';
   logout: 'cookie' | 'bearer';
@@ -46,6 +52,8 @@ export type EntrypointPathMap = {
   signInWithPassword: string;
   requestPasswordReset?: string;
   resetPassword?: string;
+  requestEmailVerification?: string;
+  verifyEmail?: string;
   getSession: string;
   refreshSession: string;
   logout: string;
@@ -59,6 +67,8 @@ export const defaultEntrypointMethods = {
   signInWithPassword: 'POST',
   requestPasswordReset: 'POST',
   resetPassword: 'POST',
+  requestEmailVerification: 'POST',
+  verifyEmail: 'POST',
   getSession: 'GET',
   refreshSession: 'POST',
   logout: 'POST',

@@ -14,7 +14,14 @@ export function validateStartupConfig(
       config.entrypointTransport[action] !== undefined
   );
 
-  const optionalActions: SupportedAction[] = ['startOAuth', 'finishOAuth', 'requestPasswordReset', 'resetPassword'];
+  const optionalActions: SupportedAction[] = [
+    'startOAuth',
+    'finishOAuth',
+    'requestPasswordReset',
+    'resetPassword',
+    'requestEmailVerification',
+    'verifyEmail'
+  ];
   for (const action of optionalActions) {
     const hasMethod = config.entrypointMethods[action] !== undefined;
     const hasPath = config.entrypointPaths[action] !== undefined;
@@ -46,6 +53,15 @@ export function validateStartupConfig(
       ok: false,
       code: 'RUNTIME_MISCONFIGURED',
       message: 'requestPasswordReset and resetPassword must be configured together.'
+    };
+  }
+  const hasRequestEmailVerificationConfigured = configuredActions.includes('requestEmailVerification');
+  const hasVerifyEmailConfigured = configuredActions.includes('verifyEmail');
+  if (hasRequestEmailVerificationConfigured !== hasVerifyEmailConfigured) {
+    return {
+      ok: false,
+      code: 'RUNTIME_MISCONFIGURED',
+      message: 'requestEmailVerification and verifyEmail must be configured together.'
     };
   }
   if (hasOAuthConfigured) {

@@ -11,7 +11,7 @@ export async function applyResult(
 
     switch (result.kind) {
       case 'success':
-        const noContentActions = new Set(['logout', 'logoutAll', 'requestPasswordReset', 'resetPassword']);
+        const noContentActions = new Set(['logout', 'logoutAll', 'requestPasswordReset', 'resetPassword', 'requestEmailVerification', 'verifyEmail']);
         const shouldHaveNoContent = noContentActions.has(result.action);
         return {
           status: shouldHaveNoContent ? 204 : 200,
@@ -53,3 +53,4 @@ export async function applyResult(
     };
   }
 }
+

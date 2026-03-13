@@ -2,6 +2,7 @@ import type { AuthConfig, AuthError, AuthResult, Plugin, PluginServices, Request
 import { createRollbackSignal } from '../../kernel/rollback-signal.js';
 
 const PASSWORD_RESET_TOKEN_TTL_MS = 15 * 60 * 1000;
+const EMAIL_VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 
 function isAuthError<T>(value: T | AuthError): value is AuthError {
   return typeof value === 'object' && value !== null && 'category' in value && 'code' in value;
@@ -282,10 +283,122 @@ async function executeResetPassword(context: RequestContext, services: PluginSer
   }
 }
 
+async function executeRequestEmailVerification(
+  context: RequestContext,
+  services: PluginServices
+): Promise<AuthResult | AuthError> {
+  const email = context.body?.email;
+  if (typeof email !== 'string') {
+    return invalidInput();
+  }
+
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail || !hasExactlyOneAt(normalizedEmail)) {
+    return invalidInput();
+  }
+
+  if (!services.storage.emailVerificationTokens || !services.storage.verifiedEmails) {
+    return runtimeMisconfigured('Email verification storage is not configured.');
+  }
+
+  const identity = await services.storage.identities.findByNormalizedEmail(normalizedEmail);
+  if (isAuthError(identity)) {
+    return identity;
+  }
+
+  if (identity) {
+    const existingVerification = await services.storage.verifiedEmails.find(normalizedEmail);
+    if (isAuthError(existingVerification)) {
+      return existingVerification;
+    }
+
+    if (!existingVerification) {
+      const token = await services.crypto.generateOpaqueToken();
+      if (isAuthError(token)) {
+        return token;
+      }
+
+      const tokenHash = await services.crypto.deriveTokenId(token);
+      if (isAuthError(tokenHash)) {
+        return tokenHash;
+      }
+
+      const created = await services.storage.emailVerificationTokens.create({
+        tokenHash,
+        normalizedEmail,
+        expiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS).toISOString()
+      });
+      if (isAuthError(created)) {
+        return storageUnavailable(created.message);
+      }
+    }
+  }
+
+  return {
+    kind: 'success',
+    action: 'requestEmailVerification'
+  };
+}
+
+async function executeVerifyEmail(context: RequestContext, services: PluginServices): Promise<AuthResult | AuthError> {
+  const verificationToken = context.body?.verificationToken;
+  if (typeof verificationToken !== 'string' || !verificationToken.trim()) {
+    return invalidInput();
+  }
+
+  const tokenHash = await services.crypto.deriveTokenId(verificationToken);
+  if (isAuthError(tokenHash)) {
+    return tokenHash;
+  }
+
+  try {
+    const outcome = await services.storage.beginTransaction(async (tx) => {
+      if (!tx.emailVerificationTokens || !tx.verifiedEmails) {
+        throw createRollbackSignal(runtimeMisconfigured('Email verification storage is not configured.'));
+      }
+
+      const consumed = await tx.emailVerificationTokens.consume({
+        tokenHash,
+        nowIso: new Date().toISOString()
+      });
+      if (isAuthError(consumed)) {
+        throw createRollbackSignal(consumed);
+      }
+      if (!consumed) {
+        throw createRollbackSignal(invalidInput());
+      }
+
+      const marked = await tx.verifiedEmails.markVerified(consumed.normalizedEmail, new Date().toISOString());
+      if (isAuthError(marked)) {
+        throw createRollbackSignal(marked);
+      }
+
+      return {
+        kind: 'success' as const,
+        action: 'verifyEmail' as const
+      };
+    });
+
+    return outcome;
+  } catch (error) {
+    if (isRollbackSignal(error)) {
+      return error.outcome;
+    }
+    return storageUnavailable('Email verification transaction failed unexpectedly.');
+  }
+}
+
 export function createEmailPasswordPlugin(): Plugin {
   return {
     id: 'emailPassword',
-    actions: () => ['signUpWithPassword', 'signInWithPassword', 'requestPasswordReset', 'resetPassword'],
+    actions: () => [
+      'signUpWithPassword',
+      'signInWithPassword',
+      'requestPasswordReset',
+      'resetPassword',
+      'requestEmailVerification',
+      'verifyEmail'
+    ],
     validateConfig: (config: AuthConfig) => {
       if (!config.entrypointPaths.signUpWithPassword || !config.entrypointPaths.signInWithPassword) {
         return {
@@ -309,6 +422,12 @@ export function createEmailPasswordPlugin(): Plugin {
       }
       if (action === 'resetPassword') {
         return executeResetPassword(context, services);
+      }
+      if (action === 'requestEmailVerification') {
+        return executeRequestEmailVerification(context, services);
+      }
+      if (action === 'verifyEmail') {
+        return executeVerifyEmail(context, services);
       }
       return invalidInput();
     }
