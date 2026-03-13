@@ -134,6 +134,7 @@ Callback payload contracts:
 - `startOAuth` request body: `{ provider?: string; redirectTo?: string }`
 - `finishOAuth` request body: `{ provider?: string; code?: string; state?: string }`
 - any missing/non-string required field -> `denied(INVALID_INPUT)`
+- `redirectTo` is optional; when present it must be a relative path starting with `/` (no protocol/host), otherwise `denied(INVALID_INPUT)`
 
 ## Data flow
 
@@ -141,7 +142,7 @@ Callback payload contracts:
 2. Plugin creates signed state nonce + stores one-time state record.
 3. Plugin returns redirect to provider auth URL with state.
 4. Provider redirects user to callback with `code` + `state`.
-5. Client calls `completeOAuth`.
+5. Client calls `finishOAuth`.
 6. Plugin verifies state (exists, unexpired, unused, expected provider).
 7. Plugin exchanges `code` with provider adapter to obtain stable provider subject.
 8. Plugin resolves or creates local user identity mapping.
@@ -161,6 +162,7 @@ Identity resolution policy:
 - All callback inputs validated structurally before provider exchange.
 - Redirect handling gated by runtime redirect capability (existing invariant).
 - No broad catches with silent fallbacks; all failures map to explicit outcomes.
+- `state-store` only persists/retrieves ciphertext values; plugin crypto helpers own encryption/decryption and key management for PKCE verifier material.
 
 ## Startup validation changes
 
