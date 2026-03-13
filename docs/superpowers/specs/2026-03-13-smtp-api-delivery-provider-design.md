@@ -103,7 +103,14 @@ Proceed with **Option A**. It aligns with existing contract-first boundaries and
 
 ### 3) Error model
 
-- Map transport/network/timeout issues to dedicated delivery infrastructure codes.
+- Package boundary returns `AuthError` only (no second exported internal error shape).
+- Mapping boundary:
+  - transport adapters produce native transport failures
+  - package error mapper converts those into `AuthError`
+- Fixed error codes for this slice:
+  - `DELIVERY_UNAVAILABLE` (network/timeout/provider 5xx)
+  - `DELIVERY_RATE_LIMITED` (provider 429/quota backpressure)
+  - `DELIVERY_MISCONFIGURED` (invalid credentials/endpoint/auth config)
 - Preserve retryability semantics:
   - transient transport failures => `retryable: true`
   - invalid credentials/misconfiguration => `retryable: false`
@@ -146,6 +153,7 @@ Proceed with **Option A**. It aligns with existing contract-first boundaries and
 - request timeout
 - max retry attempts
 - retry backoff strategy (bounded deterministic sequence)
+- uncertain-send policy: `fail-closed` (never synthesize success when send outcome is ambiguous)
 
 ## Testing strategy
 
@@ -153,6 +161,7 @@ Proceed with **Option A**. It aligns with existing contract-first boundaries and
 
 - Error mapping for timeout, auth failure, rate limit
 - Retry executor behavior (retry count and stop conditions)
+- uncertain-send behavior (timeout/connection-drop after dispatch-attempt returns `DELIVERY_UNAVAILABLE`)
 - Redaction behavior in telemetry payload
 
 ### Integration-style tests (package-level)
@@ -165,6 +174,7 @@ Proceed with **Option A**. It aligns with existing contract-first boundaries and
   - 2xx success
   - 429 rate limit
   - 5xx retriable failure
+  - ambiguous-send timeout path returns fail-closed infrastructure error
 
 ### Workspace verification
 
@@ -190,5 +200,7 @@ Proceed with **Option A**. It aligns with existing contract-first boundaries and
 ## Open decisions captured for planning
 
 - Final package name (`delivery-provider` vs `delivery-default`)
-- Chosen SMTP/HTTP client libraries already used in repo ecosystem
-- Exact delivery error code naming (single code vs granular set)
+- Client library choice constrained for planning:
+  - SMTP: `nodemailer`
+  - HTTP API: native `fetch` wrapper
+- Error code set is fixed in this spec (`DELIVERY_UNAVAILABLE`, `DELIVERY_RATE_LIMITED`, `DELIVERY_MISCONFIGURED`)
