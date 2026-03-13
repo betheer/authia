@@ -160,6 +160,24 @@ describe('validateStartupConfig', () => {
     }
   });
 
+  it('rejects partial password-reset action route configuration', () => {
+    const result = validateStartupConfig(
+      {
+        ...baseConfig,
+        entrypointMethods: {
+          ...baseConfig.entrypointMethods,
+          requestPasswordReset: 'POST'
+        }
+      } as any,
+      [...pluginActions]
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain('requestPasswordReset');
+    }
+  });
+
   it('passes for valid configuration and complete ownership', () => {
     const result = validateStartupConfig(baseConfig, [...pluginActions], { redirects: false });
 

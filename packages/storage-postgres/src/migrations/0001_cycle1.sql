@@ -38,7 +38,16 @@ create table if not exists oauth_identities (
   provider_subject text not null
 );
 
+create table if not exists password_reset_tokens (
+  id text primary key,
+  token_hash text not null unique,
+  normalized_email text not null references local_identities(normalized_email),
+  expires_at timestamptz not null,
+  consumed_at timestamptz null
+);
+
 create unique index if not exists oauth_states_state_hash_idx on oauth_states(state_hash);
 create index if not exists oauth_states_expires_at_idx on oauth_states(expires_at);
 create unique index if not exists oauth_identities_provider_subject_idx on oauth_identities(provider, provider_subject);
 create index if not exists oauth_identities_user_id_idx on oauth_identities(user_id);
+create index if not exists password_reset_tokens_expires_at_idx on password_reset_tokens(expires_at);

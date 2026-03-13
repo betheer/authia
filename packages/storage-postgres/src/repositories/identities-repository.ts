@@ -53,6 +53,29 @@ export function createIdentitiesRepository(client: DatabaseClient): Transactiona
       } catch (error) {
         return storageUnavailable('Failed to list identities', error);
       }
+    },
+
+    updatePasswordHashByNormalizedEmail: async (
+      normalizedEmail: string,
+      passwordHash: string
+    ): Promise<AuthValue<LocalIdentity | null>> => {
+      try {
+        const result = await client.query<LocalIdentityRow>(
+          `UPDATE local_identities
+           SET password_hash = $2
+           WHERE normalized_email = $1
+           RETURNING *`,
+          [normalizedEmail, passwordHash]
+        );
+
+        if (result.rows.length === 0) {
+          return null;
+        }
+
+        return mapLocalIdentityRow(result.rows[0]);
+      } catch (error) {
+        return storageUnavailable('Failed to update identity password hash', error);
+      }
     }
   };
 }

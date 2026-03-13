@@ -6,6 +6,7 @@ import { createIdentitiesRepository } from './repositories/identities-repository
 import { createSessionsRepository } from './repositories/sessions-repository.js';
 import { createOAuthStatesRepository } from './repositories/oauth-states-repository.js';
 import { createOAuthIdentitiesRepository } from './repositories/oauth-identities-repository.js';
+import { createPasswordResetTokensRepository } from './repositories/password-reset-tokens-repository.js';
 import { ensureCompatibleSchema } from './migrations/ensure-compatible-schema.js';
 
 function isRollbackSignal(error: unknown): error is RollbackSignal {
@@ -26,7 +27,8 @@ function createTransactionalStorage(client: DatabaseClient): TransactionalStorag
     identities: createIdentitiesRepository(client),
     sessions: createSessionsRepository(client),
     oauthStates: createOAuthStatesRepository(client),
-    oauthIdentities: createOAuthIdentitiesRepository(client)
+    oauthIdentities: createOAuthIdentitiesRepository(client),
+    passwordResetTokens: createPasswordResetTokensRepository(client)
   };
 }
 

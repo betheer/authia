@@ -11,13 +11,15 @@ export async function applyResult(
 
     switch (result.kind) {
       case 'success':
+        const noContentActions = new Set(['logout', 'logoutAll', 'requestPasswordReset', 'resetPassword']);
+        const shouldHaveNoContent = noContentActions.has(result.action);
         return {
-          status: result.action === 'logout' || result.action === 'logoutAll' ? 204 : 200,
+          status: shouldHaveNoContent ? 204 : 200,
           headers: {},
           clearBearer: result.responseMutations?.clearBearer,
           clearCookies: result.responseMutations?.clearCookies,
           setCookies: result.responseMutations?.setCookies,
-          body: result.action === 'logout' || result.action === 'logoutAll' ? undefined : result
+          body: shouldHaveNoContent ? undefined : result
         };
       case 'denied':
         return {

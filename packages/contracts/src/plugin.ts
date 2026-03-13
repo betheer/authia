@@ -28,6 +28,7 @@ export type PluginServices = {
     sessions: TransactionalStorage['sessions'];
     oauthStates?: TransactionalStorage['oauthStates'];
     oauthIdentities?: TransactionalStorage['oauthIdentities'];
+    passwordResetTokens?: TransactionalStorage['passwordResetTokens'];
     beginTransaction: <T>(run: (tx: TransactionalStorage) => Promise<T>) => Promise<AuthValue<T>>;
   };
   crypto: {

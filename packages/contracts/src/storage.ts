@@ -72,6 +72,25 @@ export type OAuthIdentity = {
   providerSubject: string;
 };
 
+export type PasswordResetTokenCreateInput = {
+  tokenHash: string;
+  normalizedEmail: string;
+  expiresAt: string;
+};
+
+export type PasswordResetTokenConsumeInput = {
+  tokenHash: string;
+  nowIso: string;
+};
+
+export type PasswordResetToken = {
+  id: string;
+  tokenHash: string;
+  normalizedEmail: string;
+  expiresAt: string;
+  consumedAt: string | null;
+};
+
 export type TransactionalStorage = {
   migrations: {
     ensureCompatibleSchema: () => Promise<'ok' | 'MIGRATION_MISMATCH' | AuthError>;
@@ -84,6 +103,10 @@ export type TransactionalStorage = {
     create: (input: LocalIdentityCreateInput) => Promise<AuthValue<LocalIdentity>>;
     findByNormalizedEmail: (normalizedEmail: string) => Promise<AuthValue<LocalIdentity | null>>;
     listByUser: (userId: string) => Promise<AuthValue<LocalIdentity[]>>;
+    updatePasswordHashByNormalizedEmail: (
+      normalizedEmail: string,
+      passwordHash: string
+    ) => Promise<AuthValue<LocalIdentity | null>>;
   };
   sessions: {
     create: (input: SessionCreateInput) => Promise<AuthValue<SessionRecord>>;
@@ -106,6 +129,12 @@ export type TransactionalStorage = {
       providerSubject: string
     ) => Promise<AuthValue<OAuthIdentity | null>>;
   };
+  passwordResetTokens?: {
+    create: (input: PasswordResetTokenCreateInput) => Promise<AuthValue<PasswordResetToken>>;
+    consume: (
+      input: PasswordResetTokenConsumeInput
+    ) => Promise<AuthValue<{ normalizedEmail: string } | null>>;
+  };
 };
 
 export type StorageAdapter = {
@@ -115,5 +144,6 @@ export type StorageAdapter = {
   sessions: TransactionalStorage['sessions'];
   oauthStates?: TransactionalStorage['oauthStates'];
   oauthIdentities?: TransactionalStorage['oauthIdentities'];
+  passwordResetTokens?: TransactionalStorage['passwordResetTokens'];
   beginTransaction: <T>(run: (tx: TransactionalStorage) => Promise<T>) => Promise<AuthValue<T>>;
 };

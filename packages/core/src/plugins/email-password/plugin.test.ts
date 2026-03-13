@@ -289,6 +289,105 @@ describe('createEmailPasswordPlugin', () => {
     });
     expect(services.storage.beginTransaction).not.toHaveBeenCalled();
   });
+
+  it('returns generic success for requestPasswordReset when email identity does not exist', async () => {
+    const plugin = createEmailPasswordPlugin();
+    const services = createPluginServices();
+
+    services.storage.identities.findByNormalizedEmail.mockResolvedValue(null);
+
+    const result = await plugin.execute(
+      'requestPasswordReset',
+      createContext({
+        body: {
+          email: 'missing@example.com'
+        }
+      }),
+      services as unknown as PluginServices
+    );
+
+    expect(result).toEqual({ kind: 'success', action: 'requestPasswordReset' });
+    expect(services.storage.passwordResetTokens.create).not.toHaveBeenCalled();
+  });
+
+  it('stores reset token for requestPasswordReset when identity exists', async () => {
+    const plugin = createEmailPasswordPlugin();
+    const services = createPluginServices();
+
+    services.storage.identities.findByNormalizedEmail.mockResolvedValue({
+      id: 'identity-1',
+      userId: 'user-1',
+      normalizedEmail: 'user@example.com',
+      passwordHash: 'stored-hash'
+    });
+    services.crypto.generateOpaqueToken.mockResolvedValue('reset-token');
+    services.crypto.deriveTokenId.mockResolvedValue('reset-token-hash');
+    services.storage.passwordResetTokens.create.mockResolvedValue({
+      id: 'reset-id',
+      tokenHash: 'reset-token-hash',
+      normalizedEmail: 'user@example.com',
+      expiresAt: '2025-01-01T00:15:00.000Z',
+      consumedAt: null
+    });
+
+    const result = await plugin.execute(
+      'requestPasswordReset',
+      createContext({
+        body: {
+          email: 'User@example.com'
+        }
+      }),
+      services as unknown as PluginServices
+    );
+
+    expect(result).toEqual({ kind: 'success', action: 'requestPasswordReset' });
+    expect(services.storage.passwordResetTokens.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tokenHash: 'reset-token-hash',
+        normalizedEmail: 'user@example.com'
+      })
+    );
+  });
+
+  it('consumes reset token, updates password hash, and revokes sessions on resetPassword', async () => {
+    const plugin = createEmailPasswordPlugin();
+    const services = createPluginServices();
+
+    services.crypto.deriveTokenId.mockResolvedValue('reset-token-hash');
+    services.tx.passwordResetTokens.consume.mockResolvedValue({ normalizedEmail: 'user@example.com' });
+    services.crypto.hashSecret.mockResolvedValue('next-password-hash');
+    services.tx.identities.updatePasswordHashByNormalizedEmail.mockResolvedValue({
+      id: 'identity-1',
+      userId: 'user-1',
+      normalizedEmail: 'user@example.com',
+      passwordHash: 'next-password-hash'
+    });
+    services.sessions.revokeAllSessions.mockResolvedValue(2);
+
+    const result = await plugin.execute(
+      'resetPassword',
+      createContext({
+        body: {
+          resetToken: 'reset-token',
+          password: 'password123'
+        }
+      }),
+      services as unknown as PluginServices
+    );
+
+    expect(result).toEqual({ kind: 'success', action: 'resetPassword' });
+    expect(services.tx.passwordResetTokens.consume).toHaveBeenCalledWith(
+      expect.objectContaining({ tokenHash: 'reset-token-hash' })
+    );
+    expect(services.tx.identities.updatePasswordHashByNormalizedEmail).toHaveBeenCalledWith(
+      'user@example.com',
+      'next-password-hash'
+    );
+    expect(services.sessions.revokeAllSessions).toHaveBeenCalledWith(
+      'user-1',
+      services.tx as unknown as TransactionalStorage
+    );
+  });
 });
 
 function createConfig(overrides: Partial<AuthConfig> = {}): AuthConfig {
@@ -383,7 +482,8 @@ function createPluginServices() {
     identities: {
       create: vi.fn(),
       findByNormalizedEmail: vi.fn(),
-      listByUser: vi.fn()
+      listByUser: vi.fn(),
+      updatePasswordHashByNormalizedEmail: vi.fn()
     },
     sessions: {
       create: vi.fn(),
@@ -392,6 +492,10 @@ function createPluginServices() {
       compareAndSwapToken: vi.fn(),
       revoke: vi.fn(),
       revokeAllForUser: vi.fn()
+    },
+    passwordResetTokens: {
+      create: vi.fn(),
+      consume: vi.fn()
     },
     beginTransaction: vi.fn(async (run: (txArg: TransactionalStorage) => Promise<unknown>) => run(tx as unknown as TransactionalStorage))
   };
@@ -431,7 +535,8 @@ function createTransactionalStorage() {
     identities: {
       create: vi.fn(),
       findByNormalizedEmail: vi.fn(),
-      listByUser: vi.fn()
+      listByUser: vi.fn(),
+      updatePasswordHashByNormalizedEmail: vi.fn()
     },
     sessions: {
       create: vi.fn(),
@@ -440,6 +545,10 @@ function createTransactionalStorage() {
       compareAndSwapToken: vi.fn(),
       revoke: vi.fn(),
       revokeAllForUser: vi.fn()
+    },
+    passwordResetTokens: {
+      create: vi.fn(),
+      consume: vi.fn()
     }
   };
 }

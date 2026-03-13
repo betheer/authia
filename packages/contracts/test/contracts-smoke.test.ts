@@ -13,6 +13,8 @@ describe('contracts package', () => {
     expect(supportedActions).toEqual([
       'signUpWithPassword',
       'signInWithPassword',
+      'requestPasswordReset',
+      'resetPassword',
       'getSession',
       'refreshSession',
       'logout',
@@ -26,6 +28,8 @@ describe('contracts package', () => {
     expect(defaultEntrypointMethods).toEqual({
       signUpWithPassword: 'POST',
       signInWithPassword: 'POST',
+      requestPasswordReset: 'POST',
+      resetPassword: 'POST',
       getSession: 'GET',
       refreshSession: 'POST',
       logout: 'POST',

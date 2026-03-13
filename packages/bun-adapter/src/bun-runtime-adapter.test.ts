@@ -226,6 +226,69 @@ describe('createBunRuntimeAdapter', () => {
     expect(result).toEqual({ kind: 'denied', code: 'INVALID_INPUT' });
   });
 
+  it('parses requestPasswordReset body with email', async () => {
+    const adapter = createBunRuntimeAdapter(createPasswordResetConfig());
+
+    const result = await adapter.parseRequest({
+      method: 'POST',
+      url: 'https://example.com/auth/password/request-reset',
+      headers: {},
+      cookies: {},
+      body: {
+        email: 'user@example.com'
+      }
+    });
+
+    if ('runtime' in result) {
+      expect(result.action).toBe('requestPasswordReset');
+      expect(result.body).toEqual({ email: 'user@example.com' });
+      return;
+    }
+    throw new Error('Expected parseRequest to return RequestContext.');
+  });
+
+  it('parses resetPassword body with resetToken and password', async () => {
+    const adapter = createBunRuntimeAdapter(createPasswordResetConfig());
+
+    const result = await adapter.parseRequest({
+      method: 'POST',
+      url: 'https://example.com/auth/password/reset',
+      headers: {},
+      cookies: {},
+      body: {
+        resetToken: 'token-1',
+        password: 'password123'
+      }
+    });
+
+    if ('runtime' in result) {
+      expect(result.action).toBe('resetPassword');
+      expect(result.body).toEqual({
+        resetToken: 'token-1',
+        password: 'password123'
+      });
+      return;
+    }
+    throw new Error('Expected parseRequest to return RequestContext.');
+  });
+
+  it('rejects malformed resetPassword payload fields', async () => {
+    const adapter = createBunRuntimeAdapter(createPasswordResetConfig());
+
+    const result = await adapter.parseRequest({
+      method: 'POST',
+      url: 'https://example.com/auth/password/reset',
+      headers: {},
+      cookies: {},
+      body: {
+        resetToken: '',
+        password: 'password123'
+      }
+    });
+
+    expect(result).toEqual({ kind: 'denied', code: 'INVALID_INPUT' });
+  });
+
   it('maps result objects into runtime responses', async () => {
     const success = await applyResult({
       kind: 'success',
@@ -319,6 +382,28 @@ function createOAuthConfig(): AuthConfig {
       ...config.entrypointTransport,
       startOAuth: 'cookie',
       finishOAuth: 'cookie'
+    }
+  };
+}
+
+function createPasswordResetConfig(): AuthConfig {
+  const config = createConfig();
+  return {
+    ...config,
+    entrypointMethods: {
+      ...config.entrypointMethods,
+      requestPasswordReset: 'POST',
+      resetPassword: 'POST'
+    },
+    entrypointPaths: {
+      ...config.entrypointPaths,
+      requestPasswordReset: '/auth/password/request-reset',
+      resetPassword: '/auth/password/reset'
+    },
+    entrypointTransport: {
+      ...config.entrypointTransport,
+      requestPasswordReset: 'cookie',
+      resetPassword: 'cookie'
     }
   };
 }

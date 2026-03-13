@@ -14,8 +14,8 @@ export function validateStartupConfig(
       config.entrypointTransport[action] !== undefined
   );
 
-  const optionalOAuthActions: SupportedAction[] = ['startOAuth', 'finishOAuth'];
-  for (const action of optionalOAuthActions) {
+  const optionalActions: SupportedAction[] = ['startOAuth', 'finishOAuth', 'requestPasswordReset', 'resetPassword'];
+  for (const action of optionalActions) {
     const hasMethod = config.entrypointMethods[action] !== undefined;
     const hasPath = config.entrypointPaths[action] !== undefined;
     const hasTransport = config.entrypointTransport[action] !== undefined;
@@ -29,7 +29,7 @@ export function validateStartupConfig(
     }
   }
 
-  const hasOAuthConfigured = optionalOAuthActions.some((action) => configuredActions.includes(action));
+  const hasOAuthConfigured = ['startOAuth', 'finishOAuth'].some((action) => configuredActions.includes(action as SupportedAction));
   const hasStartOAuthConfigured = configuredActions.includes('startOAuth');
   const hasFinishOAuthConfigured = configuredActions.includes('finishOAuth');
   if (hasStartOAuthConfigured !== hasFinishOAuthConfigured) {
@@ -37,6 +37,15 @@ export function validateStartupConfig(
       ok: false,
       code: 'RUNTIME_MISCONFIGURED',
       message: 'startOAuth and finishOAuth must be configured together.'
+    };
+  }
+  const hasRequestPasswordResetConfigured = configuredActions.includes('requestPasswordReset');
+  const hasResetPasswordConfigured = configuredActions.includes('resetPassword');
+  if (hasRequestPasswordResetConfigured !== hasResetPasswordConfigured) {
+    return {
+      ok: false,
+      code: 'RUNTIME_MISCONFIGURED',
+      message: 'requestPasswordReset and resetPassword must be configured together.'
     };
   }
   if (hasOAuthConfigured) {

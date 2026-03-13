@@ -62,6 +62,7 @@ export type RequestContext = {
   body?: {
     email?: string;
     password?: string;
+    resetToken?: string;
     provider?: string;
     redirectTo?: string;
     code?: string;
@@ -77,6 +78,11 @@ export type AuthResult =
       subject: User;
       session: SessionRecord;
       transport: SessionTransport;
+      responseMutations?: ResponseMutations;
+    }
+  | {
+      kind: 'success';
+      action: 'requestPasswordReset' | 'resetPassword';
       responseMutations?: ResponseMutations;
     }
   | {

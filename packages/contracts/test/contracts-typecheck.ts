@@ -45,7 +45,8 @@ const storageAdapter: StorageAdapter = {
   identities: {
     create: async () => ({ id: 'identity', userId: 'user', normalizedEmail: '', passwordHash: '' }),
     findByNormalizedEmail: async () => null,
-    listByUser: async () => []
+    listByUser: async () => [],
+    updatePasswordHashByNormalizedEmail: async () => null
   },
   sessions: {
     create: async () => ({
@@ -91,6 +92,16 @@ const storageAdapter: StorageAdapter = {
       providerSubject: 'provider-subject'
     }),
     findByProviderSubject: async () => null
+  },
+  passwordResetTokens: {
+    create: async () => ({
+      id: 'reset-token',
+      tokenHash: 'token-hash',
+      normalizedEmail: 'user@example.com',
+      expiresAt: '',
+      consumedAt: null
+    }),
+    consume: async () => null
   },
   beginTransaction: async <T>(run: (tx: never) => Promise<T>) => run({} as never)
 };

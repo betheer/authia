@@ -468,7 +468,8 @@ function createPluginServices() {
     identities: {
       create: vi.fn(),
       findByNormalizedEmail: vi.fn(),
-      listByUser: vi.fn()
+      listByUser: vi.fn(),
+      updatePasswordHashByNormalizedEmail: vi.fn()
     },
     sessions: {
       create: vi.fn(),
@@ -538,7 +539,8 @@ function createTransactionalStorage() {
     identities: {
       create: vi.fn(),
       findByNormalizedEmail: vi.fn(),
-      listByUser: vi.fn()
+      listByUser: vi.fn(),
+      updatePasswordHashByNormalizedEmail: vi.fn()
     },
     sessions: {
       create: vi.fn(),
@@ -558,3 +560,4 @@ function createTransactionalStorage() {
     }
   };
 }
+

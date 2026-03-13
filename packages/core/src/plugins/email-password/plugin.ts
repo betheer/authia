@@ -1,6 +1,8 @@
 import type { AuthConfig, AuthError, AuthResult, Plugin, PluginServices, RequestContext } from '@authia/contracts';
 import { createRollbackSignal } from '../../kernel/rollback-signal.js';
 
+const PASSWORD_RESET_TOKEN_TTL_MS = 15 * 60 * 1000;
+
 function isAuthError<T>(value: T | AuthError): value is AuthError {
   return typeof value === 'object' && value !== null && 'category' in value && 'code' in value;
 }
@@ -29,6 +31,15 @@ function storageUnavailable(message: string): AuthError {
   return {
     category: 'infrastructure',
     code: 'STORAGE_UNAVAILABLE',
+    message,
+    retryable: false
+  };
+}
+
+function runtimeMisconfigured(message: string): AuthError {
+  return {
+    category: 'infrastructure',
+    code: 'RUNTIME_MISCONFIGURED',
     message,
     retryable: false
   };
@@ -153,10 +164,128 @@ async function executeSignIn(context: RequestContext, services: PluginServices):
   }
 }
 
+async function executeRequestPasswordReset(
+  context: RequestContext,
+  services: PluginServices
+): Promise<AuthResult | AuthError> {
+  const email = context.body?.email;
+  if (typeof email !== 'string') {
+    return invalidInput();
+  }
+
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail || !hasExactlyOneAt(normalizedEmail)) {
+    return invalidInput();
+  }
+
+  if (!services.storage.passwordResetTokens) {
+    return runtimeMisconfigured('Password reset token storage is not configured.');
+  }
+
+  const identity = await services.storage.identities.findByNormalizedEmail(normalizedEmail);
+  if (isAuthError(identity)) {
+    return identity;
+  }
+
+  if (identity) {
+    const token = await services.crypto.generateOpaqueToken();
+    if (isAuthError(token)) {
+      return token;
+    }
+
+    const tokenHash = await services.crypto.deriveTokenId(token);
+    if (isAuthError(tokenHash)) {
+      return tokenHash;
+    }
+
+    const created = await services.storage.passwordResetTokens.create({
+      tokenHash,
+      normalizedEmail,
+      expiresAt: new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS).toISOString()
+    });
+    if (isAuthError(created)) {
+      return storageUnavailable(created.message);
+    }
+  }
+
+  return {
+    kind: 'success',
+    action: 'requestPasswordReset'
+  };
+}
+
+async function executeResetPassword(context: RequestContext, services: PluginServices): Promise<AuthResult | AuthError> {
+  const resetToken = context.body?.resetToken;
+  const password = context.body?.password;
+  if (typeof resetToken !== 'string' || typeof password !== 'string') {
+    return invalidInput();
+  }
+  if (!resetToken.trim() || !isValidPassword(password)) {
+    return invalidInput();
+  }
+
+  const tokenHash = await services.crypto.deriveTokenId(resetToken);
+  if (isAuthError(tokenHash)) {
+    return tokenHash;
+  }
+
+  try {
+    const outcome = await services.storage.beginTransaction(async (tx) => {
+      if (!tx.passwordResetTokens) {
+        throw createRollbackSignal(runtimeMisconfigured('Password reset token storage is not configured.'));
+      }
+
+      const consumed = await tx.passwordResetTokens.consume({
+        tokenHash,
+        nowIso: new Date().toISOString()
+      });
+      if (isAuthError(consumed)) {
+        throw createRollbackSignal(consumed);
+      }
+      if (!consumed) {
+        throw createRollbackSignal(invalidInput());
+      }
+
+      const passwordHash = await services.crypto.hashSecret(password);
+      if (isAuthError(passwordHash)) {
+        throw createRollbackSignal(passwordHash);
+      }
+
+      const updatedIdentity = await tx.identities.updatePasswordHashByNormalizedEmail(
+        consumed.normalizedEmail,
+        passwordHash
+      );
+      if (isAuthError(updatedIdentity)) {
+        throw createRollbackSignal(updatedIdentity);
+      }
+      if (!updatedIdentity) {
+        throw createRollbackSignal(invalidInput());
+      }
+
+      const revokedCount = await services.sessions.revokeAllSessions(updatedIdentity.userId, tx);
+      if (isAuthError(revokedCount)) {
+        throw createRollbackSignal(revokedCount);
+      }
+
+      return {
+        kind: 'success' as const,
+        action: 'resetPassword' as const
+      };
+    });
+
+    return outcome;
+  } catch (error) {
+    if (isRollbackSignal(error)) {
+      return error.outcome;
+    }
+    return storageUnavailable('Password reset transaction failed unexpectedly.');
+  }
+}
+
 export function createEmailPasswordPlugin(): Plugin {
   return {
     id: 'emailPassword',
-    actions: () => ['signUpWithPassword', 'signInWithPassword'],
+    actions: () => ['signUpWithPassword', 'signInWithPassword', 'requestPasswordReset', 'resetPassword'],
     validateConfig: (config: AuthConfig) => {
       if (!config.entrypointPaths.signUpWithPassword || !config.entrypointPaths.signInWithPassword) {
         return {
@@ -174,6 +303,12 @@ export function createEmailPasswordPlugin(): Plugin {
       }
       if (action === 'signInWithPassword') {
         return executeSignIn(context, services);
+      }
+      if (action === 'requestPasswordReset') {
+        return executeRequestPasswordReset(context, services);
+      }
+      if (action === 'resetPassword') {
+        return executeResetPassword(context, services);
       }
       return invalidInput();
     }

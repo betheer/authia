@@ -153,6 +153,18 @@ export async function parseRequest(
     }
   }
 
+  if (action === 'requestPasswordReset') {
+    if (!body || !isNonEmptyString(body.email)) {
+      return invalidInputResult();
+    }
+  }
+
+  if (action === 'resetPassword') {
+    if (!body || !isNonEmptyString(body.resetToken) || !isNonEmptyString(body.password)) {
+      return invalidInputResult();
+    }
+  }
+
   return {
     action,
     runtime: 'node',
