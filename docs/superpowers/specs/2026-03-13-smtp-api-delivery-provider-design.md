@@ -84,7 +84,7 @@ Proceed with **Option A**. It aligns with existing contract-first boundaries and
   - `DeliveryProvider`:
     - `send(message: OutboundEmailMessage): Promise<AuthValue<void>>`
   - `DeliveryTelemetry`:
-    - `onEvent(event: { channel: 'smtp' | 'http'; operation: 'send'; outcome: 'success' | 'failure'; retryAttempt: number; durationMs: number; code?: string }): void`
+    - `onEvent(event: { channel: 'smtp' | 'http'; operation: 'send'; outcome: 'success' | 'failure' | 'retrying'; phase: 'attempt' | 'final'; retryAttempt: number; durationMs: number; code?: string }): void`
   - config types for SMTP/API/policy
 - `src/errors.ts`
   - dedicated mapping helpers for delivery failures (e.g. `DELIVERY_UNAVAILABLE`, `DELIVERY_RATE_LIMITED`, `DELIVERY_MISCONFIGURED`)
@@ -167,10 +167,14 @@ Proceed with **Option A**. It aligns with existing contract-first boundaries and
 ### SMTP config
 
 - host, port, secure, auth user/pass, from address
+- concrete constructor shape:
+  - `{ host: string; port: number; secure: boolean; auth: { user: string; pass: string }; from: string }`
 
 ### HTTP API config
 
 - endpoint URL, API key/header, from address
+- concrete constructor shape:
+  - `{ endpoint: string; authHeaderName: string; apiKey: string; from: string }`
 
 ### Shared policy config
 
@@ -187,7 +191,7 @@ Proceed with **Option A**. It aligns with existing contract-first boundaries and
 - 2xx => success
 - 429 => `DELIVERY_RATE_LIMITED` (`retryable: true`)
 - 401/403 => `DELIVERY_MISCONFIGURED` (`retryable: false`)
-- other 4xx => `DELIVERY_MISCONFIGURED` (`retryable: false`)
+- 400/404/422 => `DELIVERY_UNAVAILABLE` (`retryable: false`)
 - 5xx => `DELIVERY_UNAVAILABLE` (`retryable: true`)
 - timeout/network failure => `DELIVERY_UNAVAILABLE` (`retryable: true`)
 
@@ -249,7 +253,7 @@ Proceed with **Option A**. It aligns with existing contract-first boundaries and
 - Missing/invalid required config fails provider creation with `DELIVERY_MISCONFIGURED` and `retryable: false`.
 - Per-send transport failures never return `DELIVERY_MISCONFIGURED` unless provider credentials are explicitly rejected by remote auth.
 
-## Open decisions captured for planning
+## Fixed implementation choices
 
 - Client library choice constrained for planning:
   - SMTP: `nodemailer`
