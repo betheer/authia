@@ -20,8 +20,8 @@ export type EntrypointMethodMap = {
   refreshSession: 'POST';
   logout: 'POST';
   logoutAll: 'POST';
-  startOAuth: 'POST';
-  finishOAuth: 'POST';
+  startOAuth?: 'POST';
+  finishOAuth?: 'POST';
 };
 
 export type EntrypointTransportMap = {
@@ -31,8 +31,8 @@ export type EntrypointTransportMap = {
   refreshSession: 'cookie' | 'bearer';
   logout: 'cookie' | 'bearer';
   logoutAll: 'cookie' | 'bearer';
-  startOAuth: 'cookie' | 'bearer';
-  finishOAuth: 'cookie' | 'bearer';
+  startOAuth?: 'cookie' | 'bearer';
+  finishOAuth?: 'cookie' | 'bearer';
 };
 
 export type EntrypointPathMap = {
@@ -42,8 +42,8 @@ export type EntrypointPathMap = {
   refreshSession: string;
   logout: string;
   logoutAll: string;
-  startOAuth: string;
-  finishOAuth: string;
+  startOAuth?: string;
+  finishOAuth?: string;
 };
 
 export const defaultEntrypointMethods = {

@@ -7,6 +7,13 @@ export function validateStartupConfig(
   pluginActions: SupportedAction[] = [],
   runtimeCapabilities: { redirects: boolean } = { redirects: false }
 ): ValidationResult {
+  const configuredActions = supportedActions.filter(
+    (action) =>
+      config.entrypointMethods[action] !== undefined &&
+      config.entrypointPaths[action] !== undefined &&
+      config.entrypointTransport[action] !== undefined
+  );
+
   if (!config.sessionCookieName) {
     return {
       ok: false,
@@ -69,7 +76,7 @@ export function validateStartupConfig(
     ownedActions.add(action);
   }
 
-  for (const action of supportedActions) {
+  for (const action of configuredActions) {
     if (!ownedActions.has(action)) {
       return {
         ok: false,

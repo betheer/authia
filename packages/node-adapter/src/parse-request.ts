@@ -101,6 +101,9 @@ export async function parseRequest(
   }
 
   const expectedTransport = config.entrypointTransport[action];
+  if (!expectedTransport) {
+    return invalidInputResult();
+  }
   const credential = bearerToken ? { kind: 'bearer' as const, token: bearerToken } : cookieToken ? { kind: 'cookie' as const, token: cookieToken } : undefined;
   if (credential && credential.kind !== expectedTransport) {
     return invalidInputResult();
