@@ -10,7 +10,7 @@ This spec defines a focused next slice: add a dedicated delivery-provider packag
 
 ### In scope
 
-- New package: `packages/delivery-provider` (name finalization can happen during implementation planning)
+- New package: `packages/delivery-provider` (fixed for this slice)
 - Provider interfaces and concrete transport implementations for:
   - SMTP transport
   - HTTP API transport
@@ -79,9 +79,12 @@ Proceed with **Option A**. It aligns with existing contract-first boundaries and
 ### 1) Delivery provider package
 
 - `src/types.ts`
-  - `OutboundEmailMessage`
-  - `DeliveryProvider`
-  - `DeliveryTelemetry`
+  - `OutboundEmailMessage`:
+    - `{ to: string; subject: string; text: string }`
+  - `DeliveryProvider`:
+    - `send(message: OutboundEmailMessage): Promise<AuthValue<void>>`
+  - `DeliveryTelemetry`:
+    - `onEvent(event: { channel: 'smtp' | 'http'; operation: 'send'; outcome: 'success' | 'failure'; retryAttempt: number; durationMs: number; code?: string }): void`
   - config types for SMTP/API/policy
 - `src/errors.ts`
   - dedicated mapping helpers for delivery failures (e.g. `DELIVERY_UNAVAILABLE`, `DELIVERY_RATE_LIMITED`, `DELIVERY_MISCONFIGURED`)
@@ -152,7 +155,7 @@ Proceed with **Option A**. It aligns with existing contract-first boundaries and
 
 - request timeout
 - max retry attempts
-- retry backoff strategy (bounded deterministic sequence)
+- retry backoff strategy (bounded deterministic sequence: `100ms`, `300ms`, `700ms`)
 - uncertain-send policy: `fail-closed` (never synthesize success when send outcome is ambiguous)
 
 ## Testing strategy
@@ -197,9 +200,16 @@ Proceed with **Option A**. It aligns with existing contract-first boundaries and
 - No template localization framework in this slice.
 - No changes to action contracts required for this slice.
 
+## Validation and failure timing rules
+
+- Config validation happens at provider construction time (startup/composition), not per-send.
+- Required SMTP fields: host, port, secure, from, auth user, auth pass.
+- Required HTTP fields: endpoint URL, auth header/key, from.
+- Missing/invalid required config fails provider creation with `DELIVERY_MISCONFIGURED` and `retryable: false`.
+- Per-send transport failures never return `DELIVERY_MISCONFIGURED` unless provider credentials are explicitly rejected by remote auth.
+
 ## Open decisions captured for planning
 
-- Final package name (`delivery-provider` vs `delivery-default`)
 - Client library choice constrained for planning:
   - SMTP: `nodemailer`
   - HTTP API: native `fetch` wrapper
