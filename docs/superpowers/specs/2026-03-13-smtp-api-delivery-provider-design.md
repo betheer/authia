@@ -100,10 +100,12 @@ Proceed with **Option A**. It aligns with existing contract-first boundaries and
 ### 1.1) Unit boundaries and contracts
 
 - **Transport adapter boundary** (transport-specific, no retry orchestration):
-  - `type DeliveryTransport = { deliver(message: OutboundEmailMessage): Promise<AuthValue<void>> }`
+  - `type DeliveryTransport = { deliver(message: OutboundEmailMessage): Promise<void> }`
+  - adapter throws transport-native failures and does not return mapped `AuthError`
 - **Policy wrapper boundary** (transport-agnostic orchestration):
   - `type ResilientDeliveryProvider = { send(message: OutboundEmailMessage): Promise<AuthValue<void>> }`
   - wraps `DeliveryTransport` with timeout/retry/backoff and telemetry
+  - maps thrown transport-native failures into `AuthError`
 - Core integration consumes only `ResilientDeliveryProvider` via `createEmailDeliveryFromProvider(...)`.
 
 ### 2) Integration seam
@@ -117,8 +119,8 @@ Proceed with **Option A**. It aligns with existing contract-first boundaries and
 
 - Package boundary returns `AuthError` only (no second exported internal error shape).
 - Mapping boundary:
-  - transport adapters produce native transport failures
-  - package error mapper converts those into `AuthError`
+  - transport adapters throw native transport failures
+  - policy wrapper error mapper converts those into `AuthError`
 - Fixed error codes for this slice:
   - `DELIVERY_UNAVAILABLE` (network/timeout/provider 5xx)
   - `DELIVERY_RATE_LIMITED` (provider 429/quota backpressure)
@@ -133,13 +135,17 @@ Proceed with **Option A**. It aligns with existing contract-first boundaries and
 - Telemetry callback with fields:
   - channel (`smtp`/`http`)
   - operation (`send`)
-  - outcome (`success`/`failure`)
+  - outcome (`success`/`failure`/`retrying`)
   - retryAttempt
   - durationMs
+  - phase (`attempt` | `final`)
 - Redaction rules:
   - never emit raw token values
   - never emit provider secrets
   - message content truncated/redacted in telemetry
+- Emission rules:
+  - emit one `phase: 'attempt'` event per attempt
+  - emit one `phase: 'final'` event for final operation result
 
 ## Data flow
 
@@ -168,10 +174,11 @@ Proceed with **Option A**. It aligns with existing contract-first boundaries and
 
 ### Shared policy config
 
-- request timeout
-- max retry attempts
+- per-attempt timeout
+- max retry attempts (after first attempt)
 - retry backoff strategy (bounded deterministic sequence: `100ms`, `300ms`, `700ms`)
 - uncertain-send policy: `fail-closed` (never synthesize success when send outcome is ambiguous)
+- when retries exceed backoff sequence length, reuse the final value (`700ms`)
 
 ## Transport-to-error mapping table
 
