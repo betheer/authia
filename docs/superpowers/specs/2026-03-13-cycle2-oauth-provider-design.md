@@ -64,7 +64,7 @@ Cons:
 ### New supported actions
 
 - `startOAuth` (state generation + redirect)
-- `completeOAuth` (state/code validation + subject resolution + session issuance)
+- `finishOAuth` (state/code validation + subject resolution + session issuance)
 
 These actions are plugin-owned (not kernel built-ins).
 
@@ -72,8 +72,8 @@ These actions are plugin-owned (not kernel built-ins).
 
 `state-store.ts`
 
-- `create(input: { providerId: string; stateHash: string; codeVerifierHash: string; redirectUriHash: string; expiresAt: string }): Promise<AuthValue<void>>`
-- `consume(input: { providerId: string; stateHash: string; nowIso: string }): Promise<AuthValue<{ codeVerifierHash: string; redirectUriHash: string } | null>>`
+- `create(input: { providerId: string; stateHash: string; codeVerifierCiphertext: string; redirectUriHash: string; expiresAt: string }): Promise<AuthValue<void>>`
+- `consume(input: { providerId: string; stateHash: string; nowIso: string }): Promise<AuthValue<{ codeVerifier: string; redirectUriHash: string } | null>>`
 - `consume(...)` is atomic and one-time: returns `null` when missing, expired, or already consumed.
 
 `provider-client.ts`
@@ -106,10 +106,17 @@ Rules:
 - callback links to existing row when present, otherwise creates a new user + mapping in one transaction
 - if identity creation unique check collides after provider exchange, callback retries lookup once and uses the canonical row
 
+Required DB constraints/indexes:
+
+- `oauth_states(state_hash)` unique
+- `oauth_states(expires_at)` index for cleanup
+- `oauth_identities(provider, provider_subject)` unique
+- `oauth_identities(user_id)` index
+
 ### Runtime behavior
 
 - `startOAuth` returns `redirect` result to provider authorization endpoint.
-- `completeOAuth` returns:
+- `finishOAuth` returns:
   - `success` with issued session on success
   - `denied(INVALID_INPUT)` for malformed callback input/state mismatch
   - `unauthenticated(INVALID_CREDENTIALS)` for provider rejection
@@ -121,6 +128,12 @@ Rules:
 - unknown provider config -> `denied(INVALID_INPUT)`
 - state persistence failure -> `AuthError(STORAGE_UNAVAILABLE)`
 - URL composition/crypto failure -> `AuthError(CRYPTO_FAILURE)`
+
+Callback payload contracts:
+
+- `startOAuth` request body: `{ provider?: string; redirectTo?: string }`
+- `finishOAuth` request body: `{ provider?: string; code?: string; state?: string }`
+- any missing/non-string required field -> `denied(INVALID_INPUT)`
 
 ## Data flow
 
