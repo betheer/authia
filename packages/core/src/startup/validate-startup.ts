@@ -30,6 +30,15 @@ export function validateStartupConfig(
   }
 
   const hasOAuthConfigured = optionalOAuthActions.some((action) => configuredActions.includes(action));
+  const hasStartOAuthConfigured = configuredActions.includes('startOAuth');
+  const hasFinishOAuthConfigured = configuredActions.includes('finishOAuth');
+  if (hasStartOAuthConfigured !== hasFinishOAuthConfigured) {
+    return {
+      ok: false,
+      code: 'RUNTIME_MISCONFIGURED',
+      message: 'startOAuth and finishOAuth must be configured together.'
+    };
+  }
   if (hasOAuthConfigured) {
     const providers = config.oauthProviders;
     if (!providers || Object.keys(providers).length === 0) {
@@ -40,6 +49,13 @@ export function validateStartupConfig(
       };
     }
     for (const [providerId, provider] of Object.entries(providers)) {
+      if (typeof provider !== 'object' || provider === null) {
+        return {
+          ok: false,
+          code: 'RUNTIME_MISCONFIGURED',
+          message: `OAuth provider ${providerId} must be an object configuration.`
+        };
+      }
       if (
         !provider.clientId ||
         !provider.authorizationEndpoint ||

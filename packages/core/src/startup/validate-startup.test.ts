@@ -179,6 +179,44 @@ describe('validateStartupConfig', () => {
     }
   });
 
+  it('rejects when only one OAuth action is configured', () => {
+    const config = createOAuthConfiguredConfig(baseConfig, {
+      entrypointMethods: {
+        ...baseConfig.entrypointMethods,
+        startOAuth: 'POST'
+      },
+      entrypointPaths: {
+        ...baseConfig.entrypointPaths,
+        startOAuth: '/auth/oauth/start'
+      },
+      entrypointTransport: {
+        ...baseConfig.entrypointTransport,
+        startOAuth: 'bearer'
+      },
+      oauthProviders: {
+        github: {
+          clientId: 'client-id',
+          authorizationEndpoint: 'https://github.com/login/oauth/authorize',
+          tokenEndpoint: 'https://github.com/login/oauth/access_token',
+          callbackPath: '/auth/oauth/callback',
+          pkceMethod: 'S256'
+        }
+      }
+    });
+    delete (config.entrypointMethods as any).finishOAuth;
+    delete (config.entrypointPaths as any).finishOAuth;
+    delete (config.entrypointTransport as any).finishOAuth;
+
+    const result = validateStartupConfig(config, [...pluginActions, ...oauthActions] as any, {
+      redirects: true
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain('configured together');
+    }
+  });
+
   it('rejects oauth provider config when required provider fields are missing', () => {
     const result = validateStartupConfig(
       createOAuthConfiguredConfig(baseConfig, {
@@ -199,6 +237,23 @@ describe('validateStartupConfig', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.message).toContain('missing required');
+    }
+  });
+
+  it('rejects oauth provider config when provider config is malformed', () => {
+    const result = validateStartupConfig(
+      createOAuthConfiguredConfig(baseConfig, {
+        oauthProviders: {
+          github: null as any
+        }
+      }),
+      [...pluginActions, ...oauthActions] as any,
+      { redirects: true }
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain('must be an object');
     }
   });
 
