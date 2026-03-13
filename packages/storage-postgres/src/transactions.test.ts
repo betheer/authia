@@ -156,4 +156,106 @@ describe('beginTransaction', () => {
       expect(mockRelease).toHaveBeenCalled();
     });
   });
+
+  describe('Rollback failure handling', () => {
+    it('should return STORAGE_UNAVAILABLE when ROLLBACK fails after non-rollback error', async () => {
+      // Dynamically import after mocks are set up
+      const { beginTransaction } = await import('./transactions.js');
+      
+      // First call (BEGIN) succeeds, second call (ROLLBACK) fails
+      mockQuery
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 }) // BEGIN
+        .mockRejectedValueOnce(new Error('ROLLBACK failed')); // ROLLBACK
+      
+      const result = await beginTransaction('mock-connection-string', async (tx) => {
+        throw new Error('Unexpected error');
+      });
+      
+      expect(result).toMatchObject({
+        category: 'infrastructure',
+        code: 'STORAGE_UNAVAILABLE'
+      });
+      
+      expect(mockQuery).toHaveBeenCalledWith('BEGIN');
+      expect(mockQuery).toHaveBeenCalledWith('ROLLBACK');
+    });
+
+    it('should return STORAGE_UNAVAILABLE when ROLLBACK fails after rollback signal', async () => {
+      // Dynamically import after mocks are set up
+      const { beginTransaction } = await import('./transactions.js');
+      
+      // First call (BEGIN) succeeds, second call (ROLLBACK) fails
+      mockQuery
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 }) // BEGIN
+        .mockRejectedValueOnce(new Error('ROLLBACK failed')); // ROLLBACK
+      
+      const rollbackSignal = {
+        outcome: {
+          kind: 'denied' as const,
+          code: 'INVALID_INPUT' as const
+        }
+      };
+      
+      const result = await beginTransaction('mock-connection-string', async (tx) => {
+        throw rollbackSignal;
+      });
+      
+      // Rollback failure takes precedence - transaction boundary is compromised
+      expect(result).toMatchObject({
+        category: 'infrastructure',
+        code: 'STORAGE_UNAVAILABLE'
+      });
+      
+      expect(mockQuery).toHaveBeenCalledWith('ROLLBACK');
+    });
+
+    it('should destroy client (release with destroy flag) when ROLLBACK fails', async () => {
+      // Dynamically import after mocks are set up
+      const { beginTransaction } = await import('./transactions.js');
+      
+      // Mock client with destroy capability
+      const mockClientWithDestroy = {
+        query: vi.fn(),
+        release: vi.fn()
+      };
+      
+      mockClientWithDestroy.query
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 }) // BEGIN
+        .mockRejectedValueOnce(new Error('ROLLBACK failed')); // ROLLBACK
+      
+      mockConnect.mockResolvedValue(mockClientWithDestroy);
+      
+      await beginTransaction('mock-connection-string', async (tx) => {
+        throw new Error('Unexpected error');
+      });
+      
+      // Verify client was released with destroy flag (true)
+      expect(mockClientWithDestroy.release).toHaveBeenCalledWith(true);
+    });
+
+    it('should release normally when ROLLBACK succeeds after error', async () => {
+      // Dynamically import after mocks are set up
+      const { beginTransaction } = await import('./transactions.js');
+      
+      // Mock client 
+      const mockClientNormalRelease = {
+        query: vi.fn(),
+        release: vi.fn()
+      };
+      
+      mockClientNormalRelease.query
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 }) // BEGIN
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 }); // ROLLBACK
+      
+      mockConnect.mockResolvedValue(mockClientNormalRelease);
+      
+      await beginTransaction('mock-connection-string', async (tx) => {
+        throw new Error('Unexpected error');
+      });
+      
+      // Verify client was released without destroy flag
+      expect(mockClientNormalRelease.release).toHaveBeenCalledWith();
+      expect(mockClientNormalRelease.release).not.toHaveBeenCalledWith(true);
+    });
+  });
 });

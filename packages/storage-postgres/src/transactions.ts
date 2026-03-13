@@ -39,6 +39,8 @@ export async function beginTransaction<T>(
     return storageUnavailable('Failed to acquire database connection', error);
   }
   
+  let clientReleased = false;
+  
   try {
     await client.query('BEGIN');
     
@@ -48,7 +50,15 @@ export async function beginTransaction<T>(
     await client.query('COMMIT');
     return result;
   } catch (error) {
-    await client.query('ROLLBACK');
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackError) {
+      // Rollback failed - transaction boundary is compromised
+      // Release client with destroy flag to prevent reuse of poisoned connection
+      client.release(true);
+      clientReleased = true;
+      return storageUnavailable('Transaction rollback failed', rollbackError);
+    }
     
     if (isRollbackSignal(error)) {
       throw error;
@@ -56,7 +66,9 @@ export async function beginTransaction<T>(
     
     return storageUnavailable('Transaction failed', error);
   } finally {
-    client.release();
+    if (!clientReleased) {
+      client.release();
+    }
   }
 }
 
