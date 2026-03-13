@@ -434,26 +434,19 @@ describe('PostgreSQL Storage Adapter', () => {
     it('should rollback and re-throw rollback signals', async () => {
       const adapter = createPostgresStorageAdapter(TEST_DATABASE_URL!);
       
-      const result = await adapter.beginTransaction(async (tx) => {
-        await tx.users.create({});
-        
-        // Throw rollback signal
-        throw {
-          outcome: {
-            kind: 'denied',
-            code: 'INVALID_INPUT'
-          }
-        };
-      });
-
-      expect(isAuthError(result)).toBe(false);
-      if (isAuthError(result)) return;
+      const rollbackSignal = {
+        outcome: {
+          kind: 'denied' as const,
+          code: 'INVALID_INPUT' as const
+        }
+      };
       
-      // Result should be the rollback outcome
-      expect(result).toEqual({
-        kind: 'denied',
-        code: 'INVALID_INPUT'
-      });
+      await expect(
+        adapter.beginTransaction(async (tx) => {
+          await tx.users.create({});
+          throw rollbackSignal;
+        })
+      ).rejects.toEqual(rollbackSignal);
 
       // Verify user was rolled back
       if (pool) {

@@ -32,9 +32,11 @@ export type AuthErrorCode =
   | 'POLICY_FAILURE'
   | 'RESPONSE_APPLY_FAILED';
 
+export type StorageConstraintCode = 'DUPLICATE_IDENTITY';
+
 export type AuthError = {
   category: 'operator' | 'infrastructure';
-  code: AuthErrorCode;
+  code: AuthErrorCode | StorageConstraintCode;
   message: string;
   retryable: boolean;
 };

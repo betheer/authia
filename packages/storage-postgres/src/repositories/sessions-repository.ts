@@ -80,6 +80,11 @@ export function createSessionsRepository(client: DatabaseClient): TransactionalS
           values.push(input.revokedAt);
         }
         
+        // Handle empty patch - no updates to perform
+        if (updates.length === 0) {
+          return storageUnavailable('No fields provided for session update');
+        }
+        
         values.push(sessionId);
         
         const result = await client.query<SessionRow>(
@@ -118,19 +123,9 @@ export function createSessionsRepository(client: DatabaseClient): TransactionalS
           ]
         );
         
+        // If no rows updated, either session doesn't exist or token didn't match
+        // In either case, the CAS failed - return null
         if (result.rows.length === 0) {
-          // Either session doesn't exist or token ID doesn't match
-          // Check if session exists to distinguish
-          const check = await client.query(
-            'SELECT id FROM sessions WHERE id = $1',
-            [input.sessionId]
-          );
-          
-          if (check.rows.length === 0) {
-            return storageUnavailable('Session not found for token swap');
-          }
-          
-          // Token ID mismatch - return null to indicate CAS failure
           return null;
         }
         

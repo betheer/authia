@@ -31,7 +31,13 @@ export async function beginTransaction<T>(
   run: (tx: TransactionalStorage) => Promise<T>
 ): Promise<T | AuthError> {
   const pool = createPool(connectionString);
-  const client = await pool.connect();
+  
+  let client;
+  try {
+    client = await pool.connect();
+  } catch (error) {
+    return storageUnavailable('Failed to acquire database connection', error);
+  }
   
   try {
     await client.query('BEGIN');
@@ -45,8 +51,7 @@ export async function beginTransaction<T>(
     await client.query('ROLLBACK');
     
     if (isRollbackSignal(error)) {
-      // Re-throw the outcome from the rollback signal
-      return error.outcome as T;
+      throw error;
     }
     
     return storageUnavailable('Transaction failed', error);

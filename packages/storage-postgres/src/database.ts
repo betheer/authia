@@ -24,12 +24,9 @@ export function storageUnavailable(message: string, cause?: unknown): AuthError 
 }
 
 export function duplicateIdentity(): AuthError {
-  // DUPLICATE_IDENTITY is a denied code, not an AuthErrorCode, but the storage layer
-  // returns it as an AuthError to signal this specific constraint violation.
-  // The runtime will handle this appropriately (e.g., node-adapter maps it to 409).
   return {
     category: 'infrastructure',
-    code: 'DUPLICATE_IDENTITY' as any,
+    code: 'DUPLICATE_IDENTITY',
     message: 'Identity with this normalized email already exists',
     retryable: false
   };
