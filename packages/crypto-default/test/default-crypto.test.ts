@@ -109,6 +109,20 @@ describe('createDefaultCryptoProvider', () => {
       expect(await provider.verifyOpaqueToken(token, differentVerifier)).toBe(false);
     });
 
+    it('rejects verifier with null-byte padding (regression test)', async () => {
+      // Regression test: verifier with trailing null byte should NOT match
+      // even though padding logic might make them appear equal
+      const provider = createDefaultCryptoProvider({
+        deriveTokenVerifier: async () => 'abc'
+      });
+
+      // Exact match should succeed
+      expect(await provider.verifyOpaqueToken('token', 'abc')).toBe(true);
+
+      // Null-byte-extended verifier should fail (not an exact match)
+      expect(await provider.verifyOpaqueToken('token', 'abc\u0000')).toBe(false);
+    });
+
     it('uses explicit Argon2id cost parameters when hashing', async () => {
       // Test that the default implementation successfully hashes with explicit parameters
       // by verifying that hashing works and the hash can be verified

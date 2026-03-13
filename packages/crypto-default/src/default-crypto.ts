@@ -94,7 +94,9 @@ export function createDefaultCryptoProvider(
         const derivedBuffer = Buffer.from(derivedPadded, 'utf8');
         const verifierBuffer = Buffer.from(verifierPadded, 'utf8');
         
-        return timingSafeEqual(derivedBuffer, verifierBuffer);
+        // Check timing-safe equality on padded buffers, but also verify original lengths match
+        // to preserve exact-match semantics (e.g., 'abc' should not match 'abc\0')
+        return timingSafeEqual(derivedBuffer, verifierBuffer) && derived.length === verifier.length;
       } catch {
         return cryptoFailure('Failed to verify opaque token.');
       }
