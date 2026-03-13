@@ -10,6 +10,12 @@ export type OutboundEmailMessage = {
 
 export type DeliveryTransport = {
   deliver: (message: OutboundEmailMessage) => Promise<void>;
+  /**
+   * Optional lifecycle hook for best-effort transport cleanup.
+   * Callers decide when to invoke this, must not swallow errors, and should let
+   * close rejections propagate so shutdown orchestration can react.
+   */
+  close?: () => Promise<void> | void;
 };
 
 export type DeliveryProvider = {
