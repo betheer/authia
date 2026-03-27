@@ -176,7 +176,7 @@ describe('parseRequest', () => {
 
   it('rejects missing expected transport', async () => {
     const config = createConfig({
-      entrypointTransport: { getSession: 'bearer' } as any // Not complete, just to trigger missing transport for signInWithPassword
+      entrypointTransport: { ...createConfig().entrypointTransport, signInWithPassword: undefined as unknown as 'cookie' }
     });
     const result = await parseRequest({
       method: 'POST',
@@ -189,7 +189,7 @@ describe('parseRequest', () => {
 
   it('rejects credential-kind mismatch with entrypoint transport', async () => {
     const config = createConfig({
-      entrypointTransport: { getSession: 'bearer' } as any
+      entrypointTransport: { ...createConfig().entrypointTransport, getSession: 'bearer' }
     });
     const result = await parseRequest({
       method: 'GET',
