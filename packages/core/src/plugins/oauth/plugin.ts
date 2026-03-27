@@ -51,7 +51,12 @@ function runtimeMisconfigured(message: string): AuthError {
 }
 
 function isRelativeRedirect(redirectTo: string): boolean {
-  return redirectTo.startsWith('/') && !redirectTo.startsWith('//');
+  try {
+    const url = new URL(redirectTo, 'http://n');
+    return url.hostname === 'n' && redirectTo.startsWith('/') && !redirectTo.startsWith('//');
+  } catch {
+    return false;
+  }
 }
 
 function providerFromBody(context: RequestContext): string | null {

@@ -53,7 +53,12 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 function isRelativeRedirect(value: string): boolean {
-  return value.startsWith('/') && !value.startsWith('//');
+  try {
+    const url = new URL(value, 'http://n');
+    return url.hostname === 'n' && value.startsWith('/') && !value.startsWith('//');
+  } catch {
+    return false;
+  }
 }
 
 export async function parseRequest(
