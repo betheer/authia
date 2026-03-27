@@ -103,17 +103,18 @@ async function executeStartOAuth(
     return codeVerifier;
   }
 
-  const codeChallenge = await services.crypto.deriveTokenVerifier(codeVerifier);
+  const [codeChallenge, stateHash, redirectUriHash] = await Promise.all([
+    services.crypto.deriveTokenVerifier(codeVerifier),
+    services.crypto.deriveTokenId(state),
+    services.crypto.deriveTokenId(redirectTo ?? '/')
+  ]);
+
   if (isAuthError(codeChallenge)) {
     return codeChallenge;
   }
-
-  const stateHash = await services.crypto.deriveTokenId(state);
   if (isAuthError(stateHash)) {
     return stateHash;
   }
-
-  const redirectUriHash = await services.crypto.deriveTokenId(redirectTo ?? '/');
   if (isAuthError(redirectUriHash)) {
     return redirectUriHash;
   }
