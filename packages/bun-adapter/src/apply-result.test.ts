@@ -1,5 +1,6 @@
 import type { AuthError, AuthResult } from '@authia/contracts';
 import { describe, expect, it } from 'vitest';
+
 import { applyResult } from './apply-result.js';
 
 describe('applyResult', () => {
@@ -29,7 +30,13 @@ describe('applyResult', () => {
     });
 
     it('returns status 200 with body for other success actions', async () => {
-      const result: AuthResult = { kind: 'success', action: 'login', data: { user: 'test' } };
+      const result: AuthResult = {
+        kind: 'success',
+        action: 'getSession',
+        subject: { id: 'user_1', claims: {} },
+        session: { id: 'session_1', subjectId: 'user_1', createdAt: new Date(), updatedAt: new Date() },
+        transport: 'cookie'
+      };
       const response = await applyResult(result);
       expect(response).toEqual({
         status: 200,
@@ -44,10 +51,13 @@ describe('applyResult', () => {
     it('maps response mutations correctly', async () => {
       const result: AuthResult = {
         kind: 'success',
-        action: 'login',
+        action: 'getSession',
+        subject: { id: 'user_1', claims: {} },
+        session: { id: 'session_1', subjectId: 'user_1', createdAt: new Date(), updatedAt: new Date() },
+        transport: 'cookie',
         responseMutations: {
           clearBearer: true,
-          clearCookies: ['test'],
+          clearCookies: [{ name: 'test' }],
           setCookies: [{ name: 'test', value: '123' }]
         }
       };
@@ -56,7 +66,7 @@ describe('applyResult', () => {
         status: 200,
         headers: {},
         clearBearer: true,
-        clearCookies: ['test'],
+        clearCookies: [{ name: 'test' }],
         setCookies: [{ name: 'test', value: '123' }],
         body: result
       });
@@ -107,7 +117,7 @@ describe('applyResult', () => {
 
   describe('unauthenticated results', () => {
     it('maps to 401', async () => {
-      const result: AuthResult = { kind: 'unauthenticated', action: 'user' };
+      const result: AuthResult = { kind: 'unauthenticated', action: 'getSession' };
       const response = await applyResult(result);
       expect(response).toEqual({
         status: 401,
@@ -121,7 +131,6 @@ describe('applyResult', () => {
     it('maps to 303 with location header if allowed', async () => {
       const result: AuthResult = {
         kind: 'redirect',
-        action: 'login',
         responseMutations: { redirectTo: 'https://example.com' }
       };
       const response = await applyResult(result);
@@ -134,7 +143,6 @@ describe('applyResult', () => {
     it('returns RUNTIME_MISCONFIGURED error if redirects not allowed', async () => {
       const result: AuthResult = {
         kind: 'redirect',
-        action: 'login',
         responseMutations: { redirectTo: 'https://example.com' }
       };
       const response = await applyResult(result, { redirects: false });
