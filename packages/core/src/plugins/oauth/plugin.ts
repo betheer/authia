@@ -1,5 +1,5 @@
 import type { AuthConfig, AuthError, AuthResult, Plugin, PluginServices, RequestContext } from '@authia/contracts';
-import { createRollbackSignal } from '../../kernel/rollback-signal.js';
+import { createRollbackSignal, isRollbackSignal } from '../../kernel/rollback-signal.js';
 import { createOAuthProviderClient } from './provider-client.js';
 import { createOAuthStateStore } from './state-store.js';
 
@@ -22,10 +22,6 @@ const OAUTH_IDENTITY_RACE_RETRY = 'OAUTH_IDENTITY_RACE_RETRY';
 
 function isAuthError<T>(value: T | AuthError): value is AuthError {
   return typeof value === 'object' && value !== null && 'category' in value && 'code' in value;
-}
-
-function isRollbackSignal(error: unknown): error is { outcome: AuthResult | AuthError } {
-  return typeof error === 'object' && error !== null && 'outcome' in error;
 }
 
 function invalidInput() {

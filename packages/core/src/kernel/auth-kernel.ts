@@ -1,6 +1,7 @@
 import type { AuthConfig, AuthError, AuthResult, Plugin, PluginServices, Policy, RequestContext, SessionLayer, SupportedAction } from '@authia/contracts';
 import { createClearBearerMutation, createClearCookieMutation } from '../session/transport-mutations.js';
 import { createCsrfPolicy } from '../policies/csrf-policy.js';
+import { isRollbackSignal } from './rollback-signal.js';
 
 const builtInActions: SupportedAction[] = ['getSession', 'refreshSession', 'logout', 'logoutAll'];
 
@@ -13,10 +14,6 @@ type KernelDependencies = {
 
 function isAuthError(value: unknown): value is AuthError {
   return typeof value === 'object' && value !== null && 'category' in value && 'code' in value;
-}
-
-function isRollbackSignal(error: unknown): error is { outcome: AuthResult | AuthError } {
-  return typeof error === 'object' && error !== null && 'outcome' in error;
 }
 
 function clearCurrentTransport(config: AuthConfig, context: RequestContext): AuthResult['responseMutations'] {
