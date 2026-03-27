@@ -1,5 +1,5 @@
 import type { AuthConfig, AuthError, AuthResult, Plugin, PluginServices, RequestContext } from '@authia/contracts';
-import { createRollbackSignal } from '../../kernel/rollback-signal.js';
+import { createRollbackSignal, isRollbackSignal } from '../../kernel/rollback-signal.js';
 import { createEmailDeliveryClient } from './delivery-client.js';
 
 const PASSWORD_RESET_TOKEN_TTL_MS = 15 * 60 * 1000;
@@ -7,10 +7,6 @@ const EMAIL_VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 
 function isAuthError<T>(value: T | AuthError): value is AuthError {
   return typeof value === 'object' && value !== null && 'category' in value && 'code' in value;
-}
-
-function isRollbackSignal(error: unknown): error is { outcome: AuthResult | AuthError } {
-  return typeof error === 'object' && error !== null && 'outcome' in error;
 }
 
 function normalizeEmail(email: string): string {
